@@ -1,0 +1,28 @@
+# Secrets and local configuration
+.env
+appsettings.Development.local.json
+
+# .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+
+# Test results
+TestResults/
+coverage/
+*.trx
+*.coverage
+*.cobertura.xml
+
+# Rider / Visual Studio / VS Code
+.idea/
+.vs/
+.vscode/*
+!.vscode/extensions.json
+
+# macOS
+.DS_Store
