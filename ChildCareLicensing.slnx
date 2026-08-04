@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ChildCareLicensing.Api/ChildCareLicensing.Api.csproj" />
+    <Project Path="src/ChildCareLicensing.Application/ChildCareLicensing.Application.csproj" />
+    <Project Path="src/ChildCareLicensing.Domain/ChildCareLicensing.Domain.csproj" />
+    <Project Path="src/ChildCareLicensing.Infrastructure/ChildCareLicensing.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ChildCareLicensing.IntegrationTests/ChildCareLicensing.IntegrationTests.csproj" />
+    <Project Path="tests/ChildCareLicensing.UnitTests/ChildCareLicensing.UnitTests.csproj" />
+  </Folder>
+</Solution>
