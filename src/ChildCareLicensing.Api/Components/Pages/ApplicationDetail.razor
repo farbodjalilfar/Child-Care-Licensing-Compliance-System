@@ -1,0 +1,240 @@
+@page "/facilities/{FacilityId:guid}/application"
+@inject IFacilityQueryService FacilityQuery
+@inject ILicenceApplicationService ApplicationService
+
+<PageTitle>Application - Child Care Licensing</PageTitle>
+
+@if (isLoading)
+{
+    <p role="status" aria-live="polite">Loading application...</p>
+}
+else if (pageError is not null)
+{
+    <div class="alert alert-error" role="alert">@pageError</div>
+}
+else if (facility is not null && application is not null)
+{
+    <nav aria-label="Breadcrumb" class="breadcrumb">
+        <a href="/facilities">Facilities</a>
+        <span aria-hidden="true"> / </span>
+        <span>@facility.Name</span>
+    </nav>
+
+    <h1>@facility.Name</h1>
+    <p class="lead">@facility.City, @facility.Province</p>
+
+    <section aria-labelledby="status-heading" class="card">
+        <h2 id="status-heading">Application status</h2>
+        <dl class="status-grid">
+            <div>
+                <dt>Status</dt>
+                <dd><span class="badge">@application.Status</span></dd>
+            </div>
+            <div>
+                <dt>Submitted</dt>
+                <dd>@(application.SubmittedAtUtc?.ToString("u") ?? "Not yet submitted")</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section aria-labelledby="rooms-heading" class="card">
+        <h2 id="rooms-heading">Rooms</h2>
+        @if (application.Rooms.Count == 0)
+        {
+            <p role="status">No rooms have been added to this facility yet.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <caption class="visually-hidden">Rooms included in this licence application</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Room</th>
+                            <th scope="col">Age group</th>
+                            <th scope="col">Floor area (sq m)</th>
+                            <th scope="col">Proposed capacity</th>
+                            <th scope="col">Licensed capacity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var room in application.Rooms)
+                        {
+                            <tr>
+                                <td>@room.Name</td>
+                                <td>@room.AgeGroup</td>
+                                <td>@room.FloorAreaSqM</td>
+                                <td>@room.ProposedCapacity</td>
+                                <td>@(room.LicensedCapacity?.ToString() ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section aria-labelledby="validation-heading" class="card">
+        <h2 id="validation-heading">Capacity validation</h2>
+        <p>Rules check floor area, maximum group size, and required staffing for each room.</p>
+
+        @if (validation is null)
+        {
+            <p role="status">Validation has not been run yet.</p>
+        }
+        else
+        {
+            <p role="status" aria-live="polite" class="@(validation.IsValid ? "text-success" : "text-error")">
+                @(validation.IsValid
+                    ? "All rooms meet the capacity rules."
+                    : "One or more rooms fail the capacity rules.")
+            </p>
+
+            @foreach (var room in validation.Rooms)
+            {
+                <article class="validation-card @(room.IsValid ? "valid" : "invalid")" aria-label="@room.RoomName validation">
+                    <h3>@room.RoomName (@room.AgeGroup)</h3>
+                    <ul class="metric-list">
+                        <li>Proposed: @room.ProposedCapacity</li>
+                        <li>Max by floor area: @room.MaxCapacityByFloorArea</li>
+                        <li>Max group size: @room.MaxCapacityByGroupSize</li>
+                        <li>Required staff: @room.RequiredStaff</li>
+                    </ul>
+                    @if (room.Issues.Count > 0)
+                    {
+                        <ul class="issue-list" role="list">
+                            @foreach (var issue in room.Issues)
+                            {
+                                <li role="listitem">@issue</li>
+                            }
+                        </ul>
+                    }
+                </article>
+            }
+        }
+    </section>
+
+    <section aria-labelledby="actions-heading" class="actions">
+        <h2 id="actions-heading" class="visually-hidden">Actions</h2>
+        <button type="button" class="button button-secondary" @onclick="RunValidationAsync" disabled="@isBusy">
+            Re-run validation
+        </button>
+        @if (string.Equals(application.Status, "Draft", StringComparison.Ordinal))
+        {
+            <button type="button" class="button" @onclick="SubmitApplicationAsync" disabled="@isBusy">
+                Submit application
+            </button>
+        }
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(actionMessage))
+    {
+        <div class="alert @(actionIsError ? "alert-error" : "alert-success")" role="status" aria-live="polite">
+            @actionMessage
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid FacilityId { get; set; }
+
+    private FacilitySummary? facility;
+    private LicenceApplicationDetails? application;
+    private FacilityCapacityValidationResult? validation;
+    private bool isLoading = true;
+    private bool isBusy;
+    private string? pageError;
+    private string? actionMessage;
+    private bool actionIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPageAsync();
+    }
+
+    private async Task LoadPageAsync()
+    {
+        isLoading = true;
+        pageError = null;
+
+        try
+        {
+            facility = await FacilityQuery.GetAsync(FacilityId);
+            if (facility is null)
+            {
+                pageError = "Facility not found.";
+                return;
+            }
+
+            var applicationId = await ApplicationService.CreateDraftAsync(FacilityId);
+            application = await ApplicationService.GetAsync(applicationId);
+            validation = await ApplicationService.ValidateAsync(applicationId);
+        }
+        catch (Exception)
+        {
+            pageError = "Could not load the application. Make sure the database is running.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RunValidationAsync()
+    {
+        if (application is null)
+        {
+            return;
+        }
+
+        isBusy = true;
+        actionMessage = null;
+
+        try
+        {
+            validation = await ApplicationService.ValidateAsync(application.Id);
+            actionMessage = validation.IsValid
+                ? "Validation passed for all rooms."
+                : "Validation found issues that must be fixed before submitting.";
+            actionIsError = !validation.IsValid;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task SubmitApplicationAsync()
+    {
+        if (application is null)
+        {
+            return;
+        }
+
+        isBusy = true;
+        actionMessage = null;
+
+        try
+        {
+            var result = await ApplicationService.SubmitAsync(application.Id);
+            validation = result.Validation;
+            application = await ApplicationService.GetAsync(application.Id);
+
+            if (result.Succeeded)
+            {
+                actionMessage = "Application submitted successfully.";
+                actionIsError = false;
+            }
+            else
+            {
+                actionMessage = result.ErrorMessage ?? "Submission failed.";
+                actionIsError = true;
+            }
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+}

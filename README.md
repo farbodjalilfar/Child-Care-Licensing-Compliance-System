@@ -50,20 +50,41 @@ Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) an
 ```bash
 cp .env.example .env        # then set a password
 docker compose up -d        # start SQL Server
+set -a && source .env && set +a
+dotnet run --project src/ChildCareLicensing.Api
 ```
 
-The database listens on `localhost:1433`. Stop it with `docker compose down`; data persists
-in a named Docker volume.
+Or use the helper script (waits for SQL Server to be healthy first):
+
+```bash
+./dev.sh
+```
+
+The API runs at **http://localhost:5138**. Try:
+
+**Web UI (Blazor):**
+
+- http://localhost:5138/
+- http://localhost:5138/facilities
+- http://localhost:5138/facilities/22222222-2222-2222-2222-222222222222/application
+
+**JSON API:**
+
+- http://localhost:5138/health
+- http://localhost:5138/api/facilities
+- http://localhost:5138/api/licence-applications/55555555-5555-5555-5555-555555555555
+- http://localhost:5138/api/licence-applications/55555555-5555-5555-5555-555555555555/validation
+- `POST` http://localhost:5138/api/licence-applications/55555555-5555-5555-5555-555555555555/submit
 
 ## Status
 
 Under active development. See [Issues](../../issues) for the current backlog.
 
 - [x] Development environment (.NET 10, SQL Server in Docker)
-- [ ] Solution structure and domain model
-- [ ] Database schema and migrations
-- [ ] Licence application API and capacity rules engine
-- [ ] Blazor UI
+- [x] Solution structure and domain model
+- [x] Database schema and migrations
+- [x] Licence application API and capacity rules engine
+- [x] Blazor UI
 - [ ] Public lookup API
 - [ ] Background service for expiry and renewals
 - [ ] Reporting via stored procedures

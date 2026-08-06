@@ -1,0 +1,72 @@
+@page "/facilities"
+@inject IFacilityQueryService FacilityQuery
+
+<PageTitle>Facilities - Child Care Licensing</PageTitle>
+
+<h1>My facilities</h1>
+
+@if (isLoading)
+{
+    <p role="status" aria-live="polite">Loading facilities...</p>
+}
+else if (loadError is not null)
+{
+    <div class="alert alert-error" role="alert">@loadError</div>
+}
+else if (facilities.Count == 0)
+{
+    <p role="status">No facilities found.</p>
+}
+else
+{
+    <div class="table-wrap">
+        <table>
+            <caption class="visually-hidden">Registered child care facilities</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">City</th>
+                    <th scope="col">Province</th>
+                    <th scope="col">Rooms</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var facility in facilities)
+                {
+                    <tr>
+                        <td>@facility.Name</td>
+                        <td>@facility.City</td>
+                        <td>@facility.Province</td>
+                        <td>@facility.RoomCount</td>
+                        <td>
+                            <a href="/facilities/@facility.Id/application">View application</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<FacilitySummary> facilities = [];
+    private bool isLoading = true;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            facilities = await FacilityQuery.ListAsync();
+        }
+        catch (Exception)
+        {
+            loadError = "Could not load facilities. Make sure the database is running.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
