@@ -1,11 +1,16 @@
 using ChildCareLicensing.Application.Abstractions;
 using ChildCareLicensing.Application.Facilities;
+using ChildCareLicensing.Application.PublicRegistry;
+using ChildCareLicensing.Application.Reporting;
+using ChildCareLicensing.Infrastructure.BackgroundServices;
 using ChildCareLicensing.Infrastructure.Persistence;
+using ChildCareLicensing.Infrastructure.Persistence.Reporting;
 using ChildCareLicensing.Infrastructure.Persistence.Repositories;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace ChildCareLicensing.Infrastructure;
 
@@ -22,7 +27,22 @@ public static class DependencyInjection
 
         services.AddScoped<ILicenceApplicationRepository, LicenceApplicationRepository>();
         services.AddScoped<IFacilityQueryService, FacilityQueryService>();
+        services.AddScoped<IPublicRegistryService, PublicRegistryService>();
 
+        services.AddSingleton(new SqlConnectionProvider(connectionString));
+        services.AddScoped<IComplianceReportService, ComplianceReportService>();
+
+        services.AddScoped<LicenceMaintenanceRunner>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registered separately so tests can compose the data layer without a timer running.
+    /// </summary>
+    public static IServiceCollection AddLicenceMaintenanceWorker(this IServiceCollection services)
+    {
+        services.AddHostedService<LicenceMaintenanceService>();
         return services;
     }
 

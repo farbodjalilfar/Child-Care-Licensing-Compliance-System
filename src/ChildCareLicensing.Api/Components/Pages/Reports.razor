@@ -1,0 +1,143 @@
+@page "/reports"
+@inject IComplianceReportService ReportService
+
+<PageTitle>Compliance reports - Child Care Licensing</PageTitle>
+
+<h1>Compliance reports</h1>
+
+<p class="lead">
+    These reports are produced by SQL Server stored procedures and read through Dapper, so
+    the aggregation runs in the database rather than in application memory.
+</p>
+
+@if (isLoading)
+{
+    <p role="status" aria-live="polite">Running reports...</p>
+}
+else if (loadError is not null)
+{
+    <div class="alert alert-error" role="alert">@loadError</div>
+}
+else
+{
+    <section aria-labelledby="risk-heading">
+        <h2 id="risk-heading">Facility compliance summary</h2>
+        <p class="hint">Source: <code>dbo.usp_FacilityComplianceSummary</code></p>
+
+        <div class="table-wrap">
+            <table>
+                <caption class="visually-hidden">Compliance risk by facility</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Facility</th>
+                        <th scope="col">City</th>
+                        <th scope="col">Licence</th>
+                        <th scope="col">Expires in</th>
+                        <th scope="col">Last inspection</th>
+                        <th scope="col">Open</th>
+                        <th scope="col">Overdue</th>
+                        <th scope="col">Risk</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in facilityCompliance)
+                    {
+                        <tr>
+                            <td>@row.FacilityName</td>
+                            <td>@row.City</td>
+                            <td>@row.LicenceStatus</td>
+                            <td>@FormatDays(row.DaysUntilExpiry)</td>
+                            <td>@Format(row.LastInspectionDateUtc)</td>
+                            <td>@row.OpenViolations</td>
+                            <td>@row.OverdueViolations</td>
+                            <td><span class="badge @RiskClass(row.RiskLevel)">@row.RiskLevel</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section aria-labelledby="violations-heading">
+        <h2 id="violations-heading">Findings by category</h2>
+        <p class="hint">
+            Source: <code>dbo.usp_ViolationsByCategory</code> over the last @lookbackDays days
+        </p>
+
+        @if (violationsByCategory.Count == 0)
+        {
+            <p>No findings were recorded in this window.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <caption class="visually-hidden">Findings grouped by category and severity</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Category</th>
+                            <th scope="col">Severity</th>
+                            <th scope="col">Total</th>
+                            <th scope="col">Open</th>
+                            <th scope="col">Overdue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in violationsByCategory)
+                        {
+                            <tr>
+                                <td>@row.Category</td>
+                                <td>@row.Severity</td>
+                                <td>@row.TotalCount</td>
+                                <td>@row.OpenCount</td>
+                                <td>@row.OverdueCount</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    private const int lookbackDays = 365;
+
+    private IReadOnlyList<FacilityComplianceRow> facilityCompliance = [];
+    private IReadOnlyList<ViolationsByCategoryRow> violationsByCategory = [];
+    private bool isLoading = true;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            facilityCompliance = await ReportService.GetFacilityComplianceAsync();
+            violationsByCategory = await ReportService.GetViolationsByCategoryAsync(lookbackDays);
+        }
+        catch (Exception)
+        {
+            loadError = "Could not run the reports. Make sure the database is running and migrations have been applied.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string Format(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? "Never";
+
+    private static string FormatDays(int? days) => days switch
+    {
+        null => "—",
+        < 0 => $"Expired {Math.Abs(days.Value)} days ago",
+        _ => $"{days} days"
+    };
+
+    private static string RiskClass(string risk) => risk switch
+    {
+        "High" => "badge-error",
+        "Medium" => "badge-warn",
+        _ => "badge-ok"
+    };
+}

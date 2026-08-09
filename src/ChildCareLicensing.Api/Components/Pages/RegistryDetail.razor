@@ -1,0 +1,117 @@
+@page "/registry/{FacilityId:guid}"
+@inject IPublicRegistryService Registry
+
+<PageTitle>@(facility?.Name ?? "Centre") - Public register</PageTitle>
+
+<p><a href="/registry">&larr; Back to the register</a></p>
+
+@if (isLoading)
+{
+    <p role="status" aria-live="polite">Loading centre details...</p>
+}
+else if (facility is null)
+{
+    <h1>Centre not found</h1>
+    <p>This centre is not in the public register.</p>
+}
+else
+{
+    <h1>@facility.Name</h1>
+
+    <dl class="summary">
+        <div>
+            <dt>Address</dt>
+            <dd>
+                @facility.AddressLine1@(string.IsNullOrWhiteSpace(facility.AddressLine2) ? "" : $", {facility.AddressLine2}")<br />
+                @facility.City, @facility.Province @facility.PostalCode
+            </dd>
+        </div>
+        <div>
+            <dt>Licence number</dt>
+            <dd>@(facility.LicenceNumber ?? "Not licensed")</dd>
+        </div>
+        <div>
+            <dt>Licence status</dt>
+            <dd><span class="badge @BadgeClass(facility.LicenceStatus)">@facility.LicenceStatus</span></dd>
+        </div>
+        <div>
+            <dt>Issued</dt>
+            <dd>@Format(facility.LicenceIssuedAtUtc)</dd>
+        </div>
+        <div>
+            <dt>Expires</dt>
+            <dd>@Format(facility.LicenceExpiresAtUtc)</dd>
+        </div>
+        <div>
+            <dt>Licensed capacity</dt>
+            <dd>@facility.LicensedCapacity children</dd>
+        </div>
+    </dl>
+
+    <section aria-labelledby="inspections-heading">
+        <h2 id="inspections-heading">Inspection history</h2>
+
+        @if (facility.Inspections.Count == 0)
+        {
+            <p>No inspections have been recorded for this centre.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <caption class="visually-hidden">Inspections for @facility.Name</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Date</th>
+                            <th scope="col">Summary</th>
+                            <th scope="col">Findings</th>
+                            <th scope="col">Critical</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var inspection in facility.Inspections)
+                        {
+                            <tr>
+                                <td>@inspection.InspectionDateUtc.ToString("yyyy-MM-dd")</td>
+                                <td>@inspection.Summary</td>
+                                <td>@inspection.ViolationCount</td>
+                                <td>@inspection.CriticalViolationCount</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter]
+    public Guid FacilityId { get; set; }
+
+    private PublicFacilityDetail? facility;
+    private bool isLoading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            facility = await Registry.GetAsync(FacilityId);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string Format(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? "—";
+
+    private static string BadgeClass(string status) => status switch
+    {
+        "Active" => "badge-ok",
+        "Expired" or "Revoked" => "badge-error",
+        _ => "badge-warn"
+    };
+}

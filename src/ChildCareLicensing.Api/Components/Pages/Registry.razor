@@ -1,0 +1,117 @@
+@page "/registry"
+@inject IPublicRegistryService RegistryService
+
+<PageTitle>Public register - Child Care Licensing</PageTitle>
+
+<h1>Find a licensed child care centre</h1>
+
+<p class="lead">
+    Search the public register of licensed child care centres. Results show the current
+    licence status and any findings that are still open.
+</p>
+
+<form class="filter-form" role="search" @onsubmit="SearchAsync" @onsubmit:preventDefault="true">
+    <div class="field">
+        <label for="city">City</label>
+        <input id="city" type="search" @bind="city" @bind:event="oninput" placeholder="e.g. Toronto" />
+    </div>
+    <div class="field">
+        <label for="name">Centre name</label>
+        <input id="name" type="search" @bind="name" @bind:event="oninput" placeholder="e.g. Maple" />
+    </div>
+    <div class="field field-actions">
+        <button type="submit" class="button">Search</button>
+        <button type="button" class="button button-secondary" @onclick="ResetAsync">Reset</button>
+    </div>
+</form>
+
+@if (isLoading)
+{
+    <p role="status" aria-live="polite">Searching the register...</p>
+}
+else if (loadError is not null)
+{
+    <div class="alert alert-error" role="alert">@loadError</div>
+}
+else if (results.Count == 0)
+{
+    <p role="status" aria-live="polite">No centres match your search.</p>
+}
+else
+{
+    <p role="status" aria-live="polite">@results.Count centre(s) found.</p>
+
+    <div class="table-wrap">
+        <table>
+            <caption class="visually-hidden">Licensed child care centres</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Centre</th>
+                    <th scope="col">City</th>
+                    <th scope="col">Licence</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Expires</th>
+                    <th scope="col">Open findings</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var facility in results)
+                {
+                    <tr>
+                        <td><a href="/registry/@facility.FacilityId">@facility.Name</a></td>
+                        <td>@facility.City</td>
+                        <td>@(facility.LicenceNumber ?? "—")</td>
+                        <td><span class="badge @BadgeClass(facility.LicenceStatus)">@facility.LicenceStatus</span></td>
+                        <td>@Format(facility.LicenceExpiresAtUtc)</td>
+                        <td>@facility.OpenViolations</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<PublicFacilityListing> results = [];
+    private string? city;
+    private string? name;
+    private bool isLoading = true;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => SearchAsync();
+
+    private async Task SearchAsync()
+    {
+        isLoading = true;
+        loadError = null;
+
+        try
+        {
+            results = await RegistryService.SearchAsync(city, name);
+        }
+        catch (Exception)
+        {
+            loadError = "Could not load the register. Make sure the database is running.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private Task ResetAsync()
+    {
+        city = null;
+        name = null;
+        return SearchAsync();
+    }
+
+    private static string Format(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? "—";
+
+    private static string BadgeClass(string status) => status switch
+    {
+        "Active" => "badge-ok",
+        "Expired" or "Revoked" => "badge-error",
+        _ => "badge-warn"
+    };
+}

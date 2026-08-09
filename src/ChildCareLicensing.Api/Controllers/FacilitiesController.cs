@@ -1,30 +1,24 @@
-using ChildCareLicensing.Infrastructure.Persistence;
+using ChildCareLicensing.Application.Facilities;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace ChildCareLicensing.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class FacilitiesController(ApplicationDbContext dbContext) : ControllerBase
+[Produces("application/json")]
+public class FacilitiesController(IFacilityQueryService facilities) : ControllerBase
 {
     [HttpGet]
+    [ProducesResponseType<IReadOnlyList<FacilitySummary>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
-    {
-        var facilities = await dbContext.Facilities
-            .AsNoTracking()
-            .Include(f => f.Rooms)
-            .OrderBy(f => f.Name)
-            .Select(f => new
-            {
-                f.Id,
-                f.Name,
-                f.City,
-                f.Province,
-                RoomCount = f.Rooms.Count
-            })
-            .ToListAsync(cancellationToken);
+        => Ok(await facilities.ListAsync(cancellationToken));
 
-        return Ok(facilities);
+    [HttpGet("{facilityId:guid}")]
+    [ProducesResponseType<FacilitySummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Get(Guid facilityId, CancellationToken cancellationToken)
+    {
+        var facility = await facilities.GetAsync(facilityId, cancellationToken);
+        return facility is null ? NotFound() : Ok(facility);
     }
 }

@@ -2,29 +2,38 @@
 
 <PageTitle>Home - Child Care Licensing</PageTitle>
 
-<h1>Licence your child care centre</h1>
+<h1>Child care licensing and compliance</h1>
 
 <p class="lead">
-    This demo portal lets an operator register a facility, review room capacity against
-    provincial-style rules, and submit a licence application for ministry review.
+    A demo portal for licensing child care centres. Operators register a facility, have room
+    capacity checked against provincial-style rules, and submit an application for review.
+    Ministry staff track compliance risk, and the public can look up any licensed centre.
 </p>
 
 <section aria-labelledby="quick-start-heading">
-    <h2 id="quick-start-heading">Quick start</h2>
+    <h2 id="quick-start-heading">Try it</h2>
     <ol>
-        <li>Open <a href="/facilities">My facilities</a> to see your registered centres.</li>
-        <li>Select a facility to review rooms and run capacity validation.</li>
-        <li>Submit the application when all rooms pass the rules check.</li>
+        <li>Open <a href="/facilities">My facilities</a> and pick a centre.</li>
+        <li>Review the rooms and run capacity validation against the ratio and floor-area rules.</li>
+        <li>Submit the application once every room passes.</li>
+        <li>Check the <a href="/reports">compliance reports</a> and the <a href="/registry">public register</a>.</li>
     </ol>
+
+    <a class="button" href="/facilities/22222222-2222-2222-2222-222222222222/application">
+        Open the sample application
+    </a>
 </section>
 
-<section aria-labelledby="sample-heading">
-    <h2 id="sample-heading">Sample data</h2>
+<section aria-labelledby="how-heading">
+    <h2 id="how-heading">How it is built</h2>
+    <ul>
+        <li>ASP.NET Core Web API and Blazor Server on .NET 10, in a layered solution.</li>
+        <li>The capacity rules engine lives in the domain layer with no infrastructure dependencies.</li>
+        <li>EF Core handles transactional work; Dapper and stored procedures handle reporting.</li>
+        <li>A background worker expires licences, issues renewal notices and escalates overdue findings.</li>
+    </ul>
     <p>
-        Development mode includes
-        <strong>Sunshine Early Learning Centre</strong> in Toronto with two rooms ready for validation.
+        API documentation is available at <a href="/openapi/v1.json">/openapi/v1.json</a> and the
+        health probe at <a href="/health">/health</a>.
     </p>
-    <a class="button" href="/facilities/22222222-2222-2222-2222-222222222222/application">
-        Open sample application
-    </a>
 </section>

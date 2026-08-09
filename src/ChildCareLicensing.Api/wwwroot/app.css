@@ -218,6 +218,90 @@ td {
     font-weight: 600;
 }
 
+.badge-ok {
+    background: #e7f6ec;
+    color: var(--success);
+}
+
+.badge-warn {
+    background: #fdf3e2;
+    color: #8a5300;
+}
+
+.badge-error {
+    background: #fdecec;
+    color: var(--error);
+}
+
+.filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    margin: 1.5rem 0;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.field label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.field input {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font: inherit;
+    min-width: 14rem;
+}
+
+.field input:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 1px;
+}
+
+.field-actions {
+    flex-direction: row;
+    gap: 0.5rem;
+}
+
+.hint {
+    color: var(--muted);
+    font-size: 0.875rem;
+    margin-top: -0.5rem;
+}
+
+.summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    margin: 1.5rem 0;
+}
+
+.summary dt {
+    font-size: 0.875rem;
+    color: var(--muted);
+}
+
+.summary dd {
+    margin: 0.25rem 0 0;
+    font-weight: 600;
+}
+
 .status-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
