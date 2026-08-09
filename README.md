@@ -11,6 +11,31 @@ licensed centre.
 > This is a personal learning project. It is not affiliated with, endorsed by, or
 > connected to the Government of Ontario.
 
+## Screenshots
+
+Operator capacity validation — each room is checked against staffing ratio, group size and
+floor area, with the binding rule highlighted.
+
+![Operator licence application with capacity check](docs/screenshots/05-operator-application.png)
+
+Reviewer queue — submitted applications waiting for a licensing decision.
+
+![Ministry application queue](docs/screenshots/06-review-queue.png)
+
+Review decision — the same capacity rules are re-checked before a licence can be issued.
+
+![Reviewer application decision page](docs/screenshots/07-review-detail.png)
+
+Compliance overview — risk ranking produced by SQL Server stored procedures.
+
+![Ministry compliance dashboard](docs/screenshots/03-compliance-reports.png)
+
+Public register — licence status and inspection history without an account.
+
+![Public centre register search](docs/screenshots/01-public-registry.png)
+
+![Public centre detail with inspection history](docs/screenshots/02-registry-detail.png)
+
 ## What it does
 
 **Operators** sign in, see only their own centres, describe each room (age group, floor
