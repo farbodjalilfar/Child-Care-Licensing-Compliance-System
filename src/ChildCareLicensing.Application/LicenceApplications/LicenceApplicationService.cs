@@ -13,10 +13,10 @@ public sealed class LicenceApplicationService(ILicenceApplicationRepository repo
             throw new KeyNotFoundException($"Facility '{facilityId}' was not found.");
         }
 
-        var existingDraftId = await repository.GetDraftApplicationIdForFacilityAsync(facilityId, cancellationToken);
-        if (existingDraftId.HasValue)
+        var openApplicationId = await repository.GetOpenApplicationIdForFacilityAsync(facilityId, cancellationToken);
+        if (openApplicationId.HasValue)
         {
-            return existingDraftId.Value;
+            return openApplicationId.Value;
         }
 
         return await repository.CreateDraftApplicationAsync(facilityId, cancellationToken);
@@ -24,6 +24,9 @@ public sealed class LicenceApplicationService(ILicenceApplicationRepository repo
 
     public Task<LicenceApplicationDetails?> GetAsync(Guid applicationId, CancellationToken cancellationToken = default)
         => repository.GetApplicationDetailsAsync(applicationId, cancellationToken);
+
+    public Task<Guid?> GetOwningOperatorIdAsync(Guid applicationId, CancellationToken cancellationToken = default)
+        => repository.GetOwningOperatorIdAsync(applicationId, cancellationToken);
 
     public async Task<FacilityCapacityValidationResult> ValidateAsync(
         Guid applicationId,
@@ -37,6 +40,7 @@ public sealed class LicenceApplicationService(ILicenceApplicationRepository repo
 
     public async Task<SubmitLicenceApplicationResult> SubmitAsync(
         Guid applicationId,
+        string submittedBy,
         CancellationToken cancellationToken = default)
     {
         var application = await repository.GetApplicationDetailsAsync(applicationId, cancellationToken);
@@ -50,11 +54,12 @@ public sealed class LicenceApplicationService(ILicenceApplicationRepository repo
                 null);
         }
 
-        if (!string.Equals(application.Status, ApplicationStatus.Draft.ToString(), StringComparison.Ordinal))
+        var currentStatus = Enum.Parse<ApplicationStatus>(application.Status);
+        if (!ApplicationWorkflow.CanTransition(currentStatus, ApplicationStatus.Submitted))
         {
             return new SubmitLicenceApplicationResult(
                 false,
-                $"Only draft applications can be submitted. Current status is {application.Status}.",
+                $"An application that is {ApplicationWorkflow.Describe(currentStatus).ToLowerInvariant()} cannot be submitted.",
                 applicationId,
                 application.Status,
                 null);
@@ -89,6 +94,7 @@ public sealed class LicenceApplicationService(ILicenceApplicationRepository repo
             applicationId,
             DateTime.UtcNow,
             licensedCapacities,
+            submittedBy,
             cancellationToken);
 
         return new SubmitLicenceApplicationResult(

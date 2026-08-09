@@ -1,5 +1,6 @@
 using ChildCareLicensing.Domain.Entities;
 using ChildCareLicensing.Domain.Enums;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace ChildCareLicensing.Infrastructure.Persistence;
@@ -10,19 +11,33 @@ namespace ChildCareLicensing.Infrastructure.Persistence;
 /// </summary>
 public static class DevelopmentDataSeeder
 {
+    public const string DemoPassword = "Demo!2345";
+
+    private static readonly Guid SunshineOperatorId = Guid.Parse("0a000001-0000-4000-8000-000000000001");
+    private static readonly Guid MapleGroveOperatorId = Guid.Parse("0a000002-0000-4000-8000-000000000002");
+    private static readonly Guid RiversideOperatorId = Guid.Parse("0a000003-0000-4000-8000-000000000003");
+
     public static async Task SeedAsync(ApplicationDbContext context, CancellationToken cancellationToken = default)
     {
         if (await context.Operators.AnyAsync(cancellationToken))
         {
+            // A database seeded before sign-in existed still needs the demo accounts.
+            if (await SeedDemoUsersAsync(context, cancellationToken))
+            {
+                await context.SaveChangesAsync(cancellationToken);
+            }
+
             return;
         }
+
+        await SeedDemoUsersAsync(context, cancellationToken);
 
         var now = DateTime.UtcNow;
         var today = now.Date;
 
         var sunshine = new Operator
         {
-            Id = Guid.Parse("0a000001-0000-4000-8000-000000000001"),
+            Id = SunshineOperatorId,
             LegalName = "Sunshine Child Care Inc.",
             ContactEmail = "maria@sunshinechildcare.example",
             ContactPhone = "416-555-0100",
@@ -31,7 +46,7 @@ public static class DevelopmentDataSeeder
 
         var mapleGrove = new Operator
         {
-            Id = Guid.Parse("0a000002-0000-4000-8000-000000000002"),
+            Id = MapleGroveOperatorId,
             LegalName = "Maple Grove Early Years Ltd.",
             ContactEmail = "admin@maplegrove.example",
             ContactPhone = "613-555-0142",
@@ -40,7 +55,7 @@ public static class DevelopmentDataSeeder
 
         var riverside = new Operator
         {
-            Id = Guid.Parse("0a000003-0000-4000-8000-000000000003"),
+            Id = RiversideOperatorId,
             LegalName = "Riverside Community Services",
             ContactEmail = "office@riversidecs.example",
             ContactPhone = "905-555-0188",
@@ -271,6 +286,15 @@ public static class DevelopmentDataSeeder
 
         context.LicenceApplications.Add(application);
 
+        AddStatusHistory(context, application.Id, null, ApplicationStatus.Draft,
+            application.CreatedAtUtc, "system", "Application created.");
+        AddStatusHistory(context, application.Id, ApplicationStatus.Draft, ApplicationStatus.Submitted,
+            application.SubmittedAtUtc!.Value, "operator", "Submitted after capacity validation passed.");
+        AddStatusHistory(context, application.Id, ApplicationStatus.Submitted, ApplicationStatus.UnderReview,
+            application.SubmittedAtUtc!.Value.AddDays(2), "j.tremblay@ontario.example", "Review started.");
+        AddStatusHistory(context, application.Id, ApplicationStatus.UnderReview, ApplicationStatus.Approved,
+            issuedAtUtc, "j.tremblay@ontario.example", $"Approved. Licence {licenceNumber} issued.");
+
         context.Licences.Add(new Licence
         {
             Id = Guid.NewGuid(),
@@ -317,6 +341,69 @@ public static class DevelopmentDataSeeder
         }
     }
 
+
+    /// <summary>
+    /// Demo accounts. The passwords are deliberately published in the README: this is a
+    /// public sample application, and a reviewer needs to be able to sign in and try it.
+    /// </summary>
+    private static async Task<bool> SeedDemoUsersAsync(
+        ApplicationDbContext context,
+        CancellationToken cancellationToken)
+    {
+        if (await context.Users.AnyAsync(cancellationToken))
+        {
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        var hasher = new PasswordHasher<User>();
+
+        void AddUser(string email, string displayName, UserRole role, Guid? operatorId)
+        {
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = email,
+                DisplayName = displayName,
+                Role = role,
+                OperatorId = operatorId,
+                PasswordHash = string.Empty,
+                CreatedAtUtc = now
+            };
+
+            user.PasswordHash = hasher.HashPassword(user, DemoPassword);
+            context.Users.Add(user);
+        }
+
+        AddUser("maria@sunshinechildcare.example", "Maria Santos", UserRole.Operator, SunshineOperatorId);
+        AddUser("admin@maplegrove.example", "Alex Chen", UserRole.Operator, MapleGroveOperatorId);
+        AddUser("j.tremblay@ontario.example", "Julie Tremblay", UserRole.Reviewer, null);
+        AddUser("p.raman@ontario.example", "Priya Raman", UserRole.Inspector, null);
+
+        return true;
+    }
+
+    private static void AddStatusHistory(
+        ApplicationDbContext context,
+        Guid applicationId,
+        ApplicationStatus? from,
+        ApplicationStatus to,
+        DateTime changedAtUtc,
+        string changedBy,
+        string notes)
+    {
+        context.ApplicationStatusHistory.Add(new ApplicationStatusHistory
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = applicationId,
+            FromStatus = from,
+            ToStatus = to,
+            ChangedAtUtc = changedAtUtc,
+            ChangedBy = changedBy,
+            Notes = notes,
+            CreatedAtUtc = changedAtUtc
+        });
+    }
 
     private sealed record SeedInspection(
         DateTime DateUtc,

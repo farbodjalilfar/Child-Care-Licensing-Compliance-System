@@ -1,16 +1,20 @@
 using ChildCareLicensing.Application.Abstractions;
 using ChildCareLicensing.Application.Facilities;
+using ChildCareLicensing.Application.Identity;
+using ChildCareLicensing.Application.LicenceApplications;
 using ChildCareLicensing.Application.PublicRegistry;
 using ChildCareLicensing.Application.Reporting;
+using ChildCareLicensing.Domain.Entities;
 using ChildCareLicensing.Infrastructure.BackgroundServices;
+using ChildCareLicensing.Infrastructure.Identity;
 using ChildCareLicensing.Infrastructure.Persistence;
 using ChildCareLicensing.Infrastructure.Persistence.Reporting;
 using ChildCareLicensing.Infrastructure.Persistence.Repositories;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace ChildCareLicensing.Infrastructure;
 
@@ -26,6 +30,7 @@ public static class DependencyInjection
             options.UseSqlServer(connectionString));
 
         services.AddScoped<ILicenceApplicationRepository, LicenceApplicationRepository>();
+        services.AddScoped<ILicenceApplicationReviewRepository, LicenceApplicationReviewRepository>();
         services.AddScoped<IFacilityQueryService, FacilityQueryService>();
         services.AddScoped<IPublicRegistryService, PublicRegistryService>();
 
@@ -33,6 +38,9 @@ public static class DependencyInjection
         services.AddScoped<IComplianceReportService, ComplianceReportService>();
 
         services.AddScoped<LicenceMaintenanceRunner>();
+
+        services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+        services.AddScoped<IUserAccountService, UserAccountService>();
 
         return services;
     }

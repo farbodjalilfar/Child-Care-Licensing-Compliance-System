@@ -23,7 +23,17 @@
                 Review the rooms in your centre, run the capacity check, and submit an
                 application once every room passes.
             </p>
-            <p class="entry-hint">Start with Sunshine Early Learning Centre, which has a draft application.</p>
+            <p class="entry-hint">Sign in as an operator. Each operator sees only their own centres.</p>
+        </article>
+
+        <article class="entry-card">
+            <p class="audience audience-ministry">Ministry staff view</p>
+            <h3><a href="/review">Decide applications</a></h3>
+            <p>
+                Work the queue of submitted applications, re-run the capacity check, ask for
+                more information, and issue a licence on approval.
+            </p>
+            <p class="entry-hint">Sign in as a reviewer. Inspectors can see compliance but not decide.</p>
         </article>
 
         <article class="entry-card">
@@ -81,6 +91,7 @@
     <h2 id="build-heading">How it is built</h2>
     <ul class="plain-list">
         <li>ASP.NET Core Web API and Blazor Server on .NET 10, in a layered solution.</li>
+        <li>Cookie authentication with role-based policies separating operators, reviewers and inspectors.</li>
         <li>The capacity rules engine sits in the domain layer with no infrastructure dependencies.</li>
         <li>Entity Framework Core handles transactional work; Dapper and stored procedures handle reporting.</li>
         <li>A background worker expires licences, issues renewal notices, and escalates overdue findings.</li>

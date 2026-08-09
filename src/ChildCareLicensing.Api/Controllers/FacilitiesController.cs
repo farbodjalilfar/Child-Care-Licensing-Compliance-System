@@ -1,24 +1,40 @@
+using ChildCareLicensing.Api.Security;
 using ChildCareLicensing.Application.Facilities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ChildCareLicensing.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
-[Produces("application/json")]
+[Authorize]
+[Route("api/facilities")]
 public class FacilitiesController(IFacilityQueryService facilities) : ControllerBase
 {
+    /// <summary>
+    /// Operators see only their own centres; ministry staff see the whole register.
+    /// </summary>
     [HttpGet]
-    [ProducesResponseType<IReadOnlyList<FacilitySummary>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
-        => Ok(await facilities.ListAsync(cancellationToken));
+    public async Task<IActionResult> List(CancellationToken cancellationToken)
+        => Ok(await facilities.ListAsync(User.OperatorId(), cancellationToken));
 
     [HttpGet("{facilityId:guid}")]
-    [ProducesResponseType<FacilitySummary>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Get(Guid facilityId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetById(Guid facilityId, CancellationToken cancellationToken)
     {
         var facility = await facilities.GetAsync(facilityId, cancellationToken);
-        return facility is null ? NotFound() : Ok(facility);
+        if (facility is null)
+        {
+            return NotFound();
+        }
+
+        if (User.OperatorId() is { } operatorId)
+        {
+            var owner = await facilities.GetOwningOperatorIdAsync(facilityId, cancellationToken);
+            if (owner != operatorId)
+            {
+                return Forbid();
+            }
+        }
+
+        return Ok(facility);
     }
 }

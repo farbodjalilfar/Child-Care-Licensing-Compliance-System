@@ -1,0 +1,110 @@
+@page "/account/login"
+@using ChildCareLicensing.Infrastructure.Persistence
+
+<PageTitle>Sign in - Child Care Licensing</PageTitle>
+
+<PageHeading Title="Sign in" AudienceLabel="Licensing service">
+    Ministry staff and centre operators sign in here. The public register needs no account.
+</PageHeading>
+
+<div class="login-layout">
+    <section class="panel" aria-labelledby="login-heading">
+        <h2 id="login-heading">Ministry and operator accounts</h2>
+
+        @if (ShowError)
+        {
+            <div class="alert alert-error" role="alert">
+                <strong>We could not sign you in.</strong>
+                <p>Check the email address and password, then try again.</p>
+            </div>
+        }
+
+        <form method="post" action="/account/login" class="login-form">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+            <div class="field">
+                <label for="email">Email address</label>
+                <input id="email" name="email" type="email" autocomplete="username" required
+                       value="@PrefilledEmail" />
+            </div>
+
+            <div class="field">
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required
+                       value="@PrefilledPassword" />
+            </div>
+
+            <div class="field-actions">
+                <button type="submit" class="button">Sign in</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="panel" aria-labelledby="demo-accounts-heading">
+        <h2 id="demo-accounts-heading">Demo accounts</h2>
+        <p class="muted">
+            Sample data only, so these accounts are published deliberately. Choose one to fill
+            in the form.
+        </p>
+
+        <ul class="account-list">
+            @foreach (var account in DemoAccounts)
+            {
+                <li class="account-item">
+                    <div>
+                        <p class="account-role">@account.Role</p>
+                        <p class="account-email">@account.Email</p>
+                        <p class="account-description">@account.Description</p>
+                    </div>
+                    <a class="button button-secondary button-small"
+                       href="@($"/account/login?email={Uri.EscapeDataString(account.Email)}{ReturnUrlQuery}")">
+                        Use this account<span class="visually-hidden"> (@account.Email)</span>
+                    </a>
+                </li>
+            }
+        </ul>
+
+        <p class="muted">
+            Password for every demo account: <code>@DevelopmentDataSeeder.DemoPassword</code>
+        </p>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    private string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "email")]
+    private string? Email { get; set; }
+
+    private bool ShowError => !string.IsNullOrEmpty(Error);
+
+    private string PrefilledEmail => Email ?? string.Empty;
+
+    // Only prefilled once an account has been chosen, so the field is not silently populated
+    // on a first visit.
+    private string PrefilledPassword =>
+        string.IsNullOrEmpty(Email) ? string.Empty : DevelopmentDataSeeder.DemoPassword;
+
+    private string ReturnUrlQuery => string.IsNullOrEmpty(ReturnUrl)
+        ? string.Empty
+        : $"&returnUrl={Uri.EscapeDataString(ReturnUrl)}";
+
+    private sealed record DemoAccount(string Role, string Email, string Description);
+
+    private static readonly DemoAccount[] DemoAccounts =
+    [
+        new("Operator", "maria@sunshinechildcare.example",
+            "Sunshine Child Care Inc. Has a centre with an application still to submit."),
+        new("Operator", "admin@maplegrove.example",
+            "Maple Grove Early Years Ltd. Already licensed, renewal approaching."),
+        new("Ministry reviewer", "j.tremblay@ontario.example",
+            "Reviews submitted applications and issues licences."),
+        new("Ministry inspector", "p.raman@ontario.example",
+            "Sees compliance reporting but cannot decide applications.")
+    ];
+}

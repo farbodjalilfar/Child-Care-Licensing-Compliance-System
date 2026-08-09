@@ -13,7 +13,12 @@ public sealed record FacilitySummary(
 
 public interface IFacilityQueryService
 {
-    Task<IReadOnlyList<FacilitySummary>> ListAsync(CancellationToken cancellationToken = default);
+    /// <summary>Pass an operator id to return only that operator's centres.</summary>
+    Task<IReadOnlyList<FacilitySummary>> ListAsync(
+        Guid? operatorId = null,
+        CancellationToken cancellationToken = default);
 
     Task<FacilitySummary?> GetAsync(Guid facilityId, CancellationToken cancellationToken = default);
+
+    Task<Guid?> GetOwningOperatorIdAsync(Guid facilityId, CancellationToken cancellationToken = default);
 }

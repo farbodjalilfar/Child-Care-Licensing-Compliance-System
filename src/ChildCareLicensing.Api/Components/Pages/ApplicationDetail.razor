@@ -1,6 +1,8 @@
 @page "/facilities/{FacilityId:guid}/application"
+@attribute [Authorize(Policy = AuthorizationPolicies.Operator)]
 @inject IFacilityQueryService FacilityQuery
 @inject ILicenceApplicationService ApplicationService
+@inject ILicenceApplicationReviewService Review
 
 <PageTitle>Licence application - Child Care Licensing</PageTitle>
 
@@ -37,7 +39,19 @@ else if (facility is not null && application is not null)
             <span class="step-number" aria-hidden="true">3</span>
             <span class="step-label">Submit for review</span>
         </li>
+        <li class="step @(application.Status == "Approved" ? "step-done" : application.Status == "Rejected" ? "step-blocked" : "")">
+            <span class="step-number" aria-hidden="true">4</span>
+            <span class="step-label">Ministry decision</span>
+        </li>
     </ol>
+
+    @if (!string.IsNullOrWhiteSpace(application.ReviewerNotes))
+    {
+        <div class="alert @(application.Status == "Rejected" ? "alert-error" : "alert-warning")" role="note">
+            <p class="alert-title">Message from the reviewer</p>
+            <p>@application.ReviewerNotes</p>
+        </div>
+    }
 
     <section aria-labelledby="decision-heading" class="decision @DecisionTone">
         <h2 id="decision-heading">@DecisionTitle</h2>
@@ -159,11 +173,11 @@ else if (facility is not null && application is not null)
         <button type="button" class="button button-secondary" @onclick="RunValidationAsync" disabled="@isBusy">
             Re-run capacity check
         </button>
-        @if (!IsSubmitted)
+        @if (CanSubmit)
         {
             <button type="button" class="button" @onclick="SubmitApplicationAsync"
                     disabled="@(isBusy || validation is null || !validation.IsValid)">
-                Submit application
+                @(application.Status == "AdditionalInfoRequired" ? "Resubmit application" : "Submit application")
             </button>
             @if (validation is not null && !validation.IsValid)
             {
@@ -178,11 +192,34 @@ else if (facility is not null && application is not null)
             @actionMessage
         </div>
     }
+
+    @if (history.Count > 0)
+    {
+        <section aria-labelledby="history-heading">
+            <h2 id="history-heading">Progress</h2>
+            <ol class="timeline">
+                @foreach (var entry in history)
+                {
+                    <li class="timeline-item @(entry.ToStatus == "Rejected" ? "is-critical" : entry.ToStatus == "AdditionalInfoRequired" ? "is-warn" : "")">
+                        <p class="timeline-date">@DescribeStatus(entry.ToStatus)</p>
+                        <p class="timeline-summary">@entry.ChangedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</p>
+                        @if (!string.IsNullOrWhiteSpace(entry.Notes))
+                        {
+                            <p class="timeline-findings">@entry.Notes</p>
+                        }
+                    </li>
+                }
+            </ol>
+        </section>
+    }
 }
 
 @code {
     [Parameter]
     public Guid FacilityId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
 
     private sealed record RoomView(
         string Name,
@@ -195,6 +232,9 @@ else if (facility is not null && application is not null)
     private LicenceApplicationDetails? application;
     private FacilityCapacityValidationResult? validation;
     private IReadOnlyList<RoomView> rooms = [];
+    private IReadOnlyList<ApplicationHistoryEntry> history = [];
+    private string submittedBy = string.Empty;
+    private Guid? operatorId;
     private bool isLoading = true;
     private bool isBusy;
     private string? pageError;
@@ -204,29 +244,53 @@ else if (facility is not null && application is not null)
     private bool IsSubmitted =>
         application is not null && !string.Equals(application.Status, "Draft", StringComparison.Ordinal);
 
+    private bool CanSubmit => application?.Status is "Draft" or "AdditionalInfoRequired";
+
     private int TotalLicensedCapacity => validation?.Rooms.Sum(r => r.LicensedCapacity) ?? 0;
 
     private int TotalRequiredStaff => validation?.Rooms.Sum(r => r.RequiredStaff) ?? 0;
 
-    private string DecisionTone => IsSubmitted
-        ? "decision-done"
-        : validation is null ? "decision-neutral"
-        : validation.IsValid ? "decision-ready" : "decision-blocked";
+    private string DecisionTone => application?.Status switch
+    {
+        "Approved" => "decision-done",
+        "Rejected" or "AdditionalInfoRequired" => "decision-blocked",
+        _ when IsSubmitted => "decision-done",
+        _ when validation is null => "decision-neutral",
+        _ => validation.IsValid ? "decision-ready" : "decision-blocked"
+    };
 
-    private string DecisionTitle => IsSubmitted
-        ? "Application submitted for review"
-        : validation is null ? "Capacity has not been checked"
-        : validation.IsValid ? "Ready to submit"
-        : "Cannot be submitted yet";
+    private string DecisionTitle => application?.Status switch
+    {
+        "Approved" => "Licence issued",
+        "Rejected" => "Application rejected",
+        "AdditionalInfoRequired" => "More information needed",
+        "UnderReview" => "Being reviewed by the ministry",
+        _ when IsSubmitted => "Application submitted for review",
+        _ when validation is null => "Capacity has not been checked",
+        _ => validation.IsValid ? "Ready to submit" : "Cannot be submitted yet"
+    };
 
-    private string DecisionDetail => IsSubmitted
-        ? "The licensed capacity below has been recorded against each room."
-        : validation is null ? "Run the capacity check to see what each room is permitted."
-        : validation.IsValid
+    private string DecisionDetail => application?.Status switch
+    {
+        "Approved" => "This centre now appears on the public register.",
+        "Rejected" => "See the reviewer's message above.",
+        "AdditionalInfoRequired" => "Update the details below, then resubmit.",
+        "UnderReview" => "A licensing officer has picked up this application.",
+        _ when IsSubmitted => "The licensed capacity below has been recorded against each room.",
+        _ when validation is null => "Run the capacity check to see what each room is permitted.",
+        _ => validation.IsValid
             ? "Every room is within the staffing ratio, group size and floor area limits."
-            : "At least one room asks for more children than the rules allow.";
+            : "At least one room asks for more children than the rules allow."
+    };
 
-    protected override async Task OnInitializedAsync() => await LoadPageAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateTask;
+        submittedBy = state.User.SignInName();
+        operatorId = state.User.OperatorId();
+
+        await LoadPageAsync();
+    }
 
     private async Task LoadPageAsync()
     {
@@ -242,9 +306,18 @@ else if (facility is not null && application is not null)
                 return;
             }
 
+            var owner = await FacilityQuery.GetOwningOperatorIdAsync(FacilityId);
+            if (owner != operatorId)
+            {
+                facility = null;
+                pageError = "This centre is registered to a different operator.";
+                return;
+            }
+
             var applicationId = await ApplicationService.CreateDraftAsync(FacilityId);
             application = await ApplicationService.GetAsync(applicationId);
             validation = await ApplicationService.ValidateAsync(applicationId);
+            history = await Review.GetHistoryAsync(applicationId);
             BuildRoomViews();
         }
         catch (Exception)
@@ -313,9 +386,10 @@ else if (facility is not null && application is not null)
 
         try
         {
-            var result = await ApplicationService.SubmitAsync(application.Id);
+            var result = await ApplicationService.SubmitAsync(application.Id, submittedBy);
             validation = result.Validation ?? validation;
             application = await ApplicationService.GetAsync(application.Id);
+            history = await Review.GetHistoryAsync(application!.Id);
             BuildRoomViews();
 
             actionMessage = result.Succeeded
@@ -342,4 +416,15 @@ else if (facility is not null && application is not null)
         => ageGroup == "SchoolAge" ? "School age" : ageGroup;
 
     private static string FormatArea(decimal squareMetres) => squareMetres.ToString("0.##");
+
+    private static string DescribeStatus(string status) => status switch
+    {
+        "Draft" => "Application started",
+        "Submitted" => "Submitted to the ministry",
+        "UnderReview" => "Picked up for review",
+        "AdditionalInfoRequired" => "More information requested",
+        "Approved" => "Approved",
+        "Rejected" => "Rejected",
+        _ => status
+    };
 }

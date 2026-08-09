@@ -1,19 +1,34 @@
-@* Grouped by audience: the same service is used by operators, ministry staff and the
-   public, and each group only has business with its own pages. *@
+@* Each audience only sees the pages it has business with, so the navigation follows the
+   signed-in role rather than showing everything to everyone. *@
 <nav class="site-nav" aria-label="Main navigation">
     <ul class="nav-groups">
-        <li class="nav-group">
-            <span class="nav-group-label" id="nav-operators">Operators</span>
-            <ul class="nav-list" aria-labelledby="nav-operators">
-                <li><NavLink href="/facilities">My centres</NavLink></li>
-            </ul>
-        </li>
-        <li class="nav-group">
-            <span class="nav-group-label" id="nav-ministry">Ministry staff</span>
-            <ul class="nav-list" aria-labelledby="nav-ministry">
-                <li><NavLink href="/reports">Compliance</NavLink></li>
-            </ul>
-        </li>
+        <AuthorizeView Roles="Operator">
+            <li class="nav-group">
+                <span class="nav-group-label" id="nav-operators">Operators</span>
+                <ul class="nav-list" aria-labelledby="nav-operators">
+                    <li><NavLink href="/facilities">My centres</NavLink></li>
+                </ul>
+            </li>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="Reviewer">
+            <li class="nav-group">
+                <span class="nav-group-label" id="nav-review">Review</span>
+                <ul class="nav-list" aria-labelledby="nav-review">
+                    <li><NavLink href="/review">Application queue</NavLink></li>
+                </ul>
+            </li>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="Reviewer,Inspector">
+            <li class="nav-group">
+                <span class="nav-group-label" id="nav-ministry">Ministry staff</span>
+                <ul class="nav-list" aria-labelledby="nav-ministry">
+                    <li><NavLink href="/reports">Compliance</NavLink></li>
+                </ul>
+            </li>
+        </AuthorizeView>
+
         <li class="nav-group">
             <span class="nav-group-label" id="nav-public">Public</span>
             <ul class="nav-list" aria-labelledby="nav-public">

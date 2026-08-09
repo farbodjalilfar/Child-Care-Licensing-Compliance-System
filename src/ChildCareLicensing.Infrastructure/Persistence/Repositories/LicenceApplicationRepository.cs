@@ -1,24 +1,43 @@
 using ChildCareLicensing.Application.Abstractions;
 using ChildCareLicensing.Domain.Entities;
 using ChildCareLicensing.Domain.Enums;
-using ChildCareLicensing.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace ChildCareLicensing.Infrastructure.Persistence.Repositories;
 
 public sealed class LicenceApplicationRepository(ApplicationDbContext dbContext) : ILicenceApplicationRepository
 {
+    private static readonly ApplicationStatus[] OpenStatuses =
+    [
+        ApplicationStatus.Draft,
+        ApplicationStatus.Submitted,
+        ApplicationStatus.UnderReview,
+        ApplicationStatus.AdditionalInfoRequired
+    ];
+
     public Task<bool> FacilityExistsAsync(Guid facilityId, CancellationToken cancellationToken = default)
         => dbContext.Facilities.AnyAsync(f => f.Id == facilityId, cancellationToken);
 
-    public async Task<Guid?> GetDraftApplicationIdForFacilityAsync(
+    public async Task<Guid?> GetOpenApplicationIdForFacilityAsync(
         Guid facilityId,
         CancellationToken cancellationToken = default)
     {
         return await dbContext.LicenceApplications
             .AsNoTracking()
-            .Where(a => a.FacilityId == facilityId && a.Status == ApplicationStatus.Draft)
+            .Where(a => a.FacilityId == facilityId && OpenStatuses.Contains(a.Status))
+            .OrderByDescending(a => a.CreatedAtUtc)
             .Select(a => (Guid?)a.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<Guid?> GetOwningOperatorIdAsync(
+        Guid applicationId,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.LicenceApplications
+            .AsNoTracking()
+            .Where(a => a.Id == applicationId)
+            .Select(a => (Guid?)a.Facility.OperatorId)
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -35,6 +54,7 @@ public sealed class LicenceApplicationRepository(ApplicationDbContext dbContext)
                 a.Facility.Name,
                 a.Status.ToString(),
                 a.SubmittedAtUtc,
+                a.ReviewerNotes,
                 a.Facility.Rooms
                     .OrderBy(r => r.Name)
                     .Select(r => new LicenceApplicationRoomDetails(
@@ -52,15 +72,30 @@ public sealed class LicenceApplicationRepository(ApplicationDbContext dbContext)
         Guid facilityId,
         CancellationToken cancellationToken = default)
     {
+        var now = DateTime.UtcNow;
+
         var application = new LicenceApplication
         {
             Id = Guid.NewGuid(),
             FacilityId = facilityId,
             Status = ApplicationStatus.Draft,
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = now
         };
 
         dbContext.LicenceApplications.Add(application);
+
+        dbContext.ApplicationStatusHistory.Add(new ApplicationStatusHistory
+        {
+            Id = Guid.NewGuid(),
+            ApplicationId = application.Id,
+            FromStatus = null,
+            ToStatus = ApplicationStatus.Draft,
+            ChangedAtUtc = now,
+            ChangedBy = "system",
+            Notes = "Application created.",
+            CreatedAtUtc = now
+        });
+
         await dbContext.SaveChangesAsync(cancellationToken);
         return application.Id;
     }
@@ -69,6 +104,7 @@ public sealed class LicenceApplicationRepository(ApplicationDbContext dbContext)
         Guid applicationId,
         DateTime submittedAtUtc,
         IReadOnlyDictionary<Guid, int> licensedCapacitiesByRoomId,
+        string submittedBy,
         CancellationToken cancellationToken = default)
     {
         var application = await dbContext.LicenceApplications
@@ -86,6 +122,8 @@ public sealed class LicenceApplicationRepository(ApplicationDbContext dbContext)
             }
         }
 
+        var previousStatus = application.Status;
+
         application.Status = ApplicationStatus.Submitted;
         application.SubmittedAtUtc = submittedAtUtc;
         application.UpdatedAtUtc = submittedAtUtc;
@@ -94,11 +132,11 @@ public sealed class LicenceApplicationRepository(ApplicationDbContext dbContext)
         {
             Id = Guid.NewGuid(),
             ApplicationId = application.Id,
-            FromStatus = ApplicationStatus.Draft,
+            FromStatus = previousStatus,
             ToStatus = ApplicationStatus.Submitted,
             ChangedAtUtc = submittedAtUtc,
-            ChangedBy = "operator",
-            Notes = "Application submitted after capacity validation.",
+            ChangedBy = submittedBy,
+            Notes = "Submitted after capacity validation passed.",
             CreatedAtUtc = submittedAtUtc
         });
 

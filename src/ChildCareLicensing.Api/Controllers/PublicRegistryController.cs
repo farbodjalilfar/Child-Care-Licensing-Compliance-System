@@ -1,4 +1,5 @@
 using ChildCareLicensing.Application.PublicRegistry;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ChildCareLicensing.Api.Controllers;
@@ -8,6 +9,7 @@ namespace ChildCareLicensing.Api.Controllers;
 /// Responses are cached because the register changes at most daily.
 /// </summary>
 [ApiController]
+[AllowAnonymous]
 [Route("api/public/facilities")]
 [Produces("application/json")]
 public class PublicRegistryController(IPublicRegistryService registry) : ControllerBase

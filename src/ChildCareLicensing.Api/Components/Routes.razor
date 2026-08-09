@@ -1,6 +1,32 @@
 <Router AppAssembly="typeof(Program).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+            <NotAuthorized>
+                @if (context.User.Identity?.IsAuthenticated is true)
+                {
+                    <PageTitle>Access denied</PageTitle>
+                    <PageHeading Title="Access denied" AudienceLabel="Licensing service">
+                        Your account does not have permission to open that page.
+                    </PageHeading>
+                    <div class="panel">
+                        <p>
+                            Licensing decisions are restricted to ministry reviewers, and each
+                            operator can only see their own centres.
+                        </p>
+                        <div class="action-bar">
+                            <a class="button button-secondary" href="/account/login">Switch account</a>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <RedirectToLogin />
+                }
+            </NotAuthorized>
+            <Authorizing>
+                <p role="status">Checking your permissions…</p>
+            </Authorizing>
+        </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
     <NotFound>

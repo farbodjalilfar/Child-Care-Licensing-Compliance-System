@@ -1,0 +1,344 @@
+@page "/review/{ApplicationId:guid}"
+@attribute [Authorize(Policy = AuthorizationPolicies.Reviewer)]
+@inject ILicenceApplicationService ApplicationService
+@inject ILicenceApplicationReviewService Review
+
+<PageTitle>Review application - Child Care Licensing</PageTitle>
+
+@if (_isLoading)
+{
+    <p role="status" aria-live="polite">Loading application…</p>
+}
+else if (_pageError is not null)
+{
+    <div class="alert alert-error" role="alert">@_pageError</div>
+}
+else if (_application is not null)
+{
+    <nav aria-label="Breadcrumb" class="breadcrumb">
+        <a href="/review">Application queue</a>
+        <span aria-hidden="true"> / </span>
+        <span aria-current="page">@_application.FacilityName</span>
+    </nav>
+
+    <PageHeading Title="Review application" Audience="PageHeading.AudienceKind.Ministry">
+        @_application.FacilityName
+    </PageHeading>
+
+    <section aria-labelledby="verdict-heading" class="decision @DecisionTone">
+        <h2 id="verdict-heading">@DecisionTitle</h2>
+        <p>@DecisionDetail</p>
+        <dl class="inline-facts">
+            <div>
+                <dt>Status</dt>
+                <dd><StatusBadge Status="@_application.Status" /></dd>
+            </div>
+            <div>
+                <dt>Submitted</dt>
+                <dd>@(_application.SubmittedAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "Not yet submitted")</dd>
+            </div>
+            <div>
+                <dt>Total capacity requested</dt>
+                <dd>@TotalCapacity children</dd>
+            </div>
+            <div>
+                <dt>Staff required</dt>
+                <dd>@TotalRequiredStaff</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section aria-labelledby="rooms-heading">
+        <h2 id="rooms-heading">Capacity check</h2>
+        <p class="source">
+            Run independently of the operator's own check, against the same rules engine.
+        </p>
+
+        <div class="table-wrap">
+            <table>
+                <caption class="visually-hidden">Room-by-room capacity check</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Room</th>
+                        <th scope="col">Age group</th>
+                        <th scope="col">Floor area</th>
+                        <th scope="col">Requested</th>
+                        <th scope="col">Permitted</th>
+                        <th scope="col">Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var room in _application.Rooms)
+                    {
+                        var check = _validation?.Rooms.FirstOrDefault(v => v.RoomName == room.Name);
+                        <tr>
+                            <th scope="row">@room.Name</th>
+                            <td>@FormatAgeGroup(room.AgeGroup)</td>
+                            <td>@room.FloorAreaSqM.ToString("0.##") m&sup2;</td>
+                            <td>@room.ProposedCapacity</td>
+                            <td>@(check?.MaxAllowedCapacity.ToString() ?? "Not checked")</td>
+                            <td>
+                                @if (check is null)
+                                {
+                                    <span class="muted">Not checked</span>
+                                }
+                                else if (check.IsValid)
+                                {
+                                    <span class="text-success">Within limits</span>
+                                }
+                                else
+                                {
+                                    <span class="text-error">@string.Join(" ", check.Issues)</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    @if (CanDecide)
+    {
+        <section aria-labelledby="decision-form-heading" class="panel">
+            <h2 id="decision-form-heading">Record a decision</h2>
+
+            @if (IsSubmittedOnly)
+            {
+                <p>Start the review to take this application off the queue before deciding it.</p>
+                <div class="action-bar">
+                    <button type="button" class="button" @onclick="StartReviewAsync" disabled="@_isBusy">
+                        Start review
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="field">
+                    <label for="decision-notes">Notes</label>
+                    <textarea id="decision-notes" rows="3" @bind="_notes"
+                              aria-describedby="decision-notes-hint"></textarea>
+                    <p id="decision-notes-hint" class="field-hint">
+                        Required when rejecting or asking for more information. The operator sees this.
+                    </p>
+                </div>
+
+                <div class="action-bar">
+                    <button type="button" class="button" @onclick="ApproveAsync" disabled="@ApproveDisabled">
+                        Approve and issue licence
+                    </button>
+                    <button type="button" class="button button-secondary"
+                            @onclick="RequestInformationAsync" disabled="@_isBusy">
+                        Request more information
+                    </button>
+                    <button type="button" class="button button-danger" @onclick="RejectAsync" disabled="@_isBusy">
+                        Reject
+                    </button>
+                </div>
+
+                @if (_validation is { IsValid: false })
+                {
+                    <p class="action-hint">
+                        Approval is blocked because at least one room exceeds the permitted capacity.
+                    </p>
+                }
+            }
+        </section>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_actionMessage))
+    {
+        <div class="alert @(_actionIsError ? "alert-error" : "alert-success")" role="status" aria-live="polite">
+            @_actionMessage
+        </div>
+    }
+
+    <section aria-labelledby="history-heading">
+        <h2 id="history-heading">Decision history</h2>
+
+        @if (_history.Count == 0)
+        {
+            <p class="muted">No history recorded.</p>
+        }
+        else
+        {
+            <ol class="timeline">
+                @foreach (var entry in _history)
+                {
+                    <li class="timeline-item @TimelineTone(entry.ToStatus)">
+                        <p class="timeline-date">
+                            @(entry.FromStatus is null
+                                ? Describe(entry.ToStatus)
+                                : $"{Describe(entry.FromStatus)} to {Describe(entry.ToStatus)}")
+                        </p>
+                        <p class="timeline-summary">
+                            @entry.ChangedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'") &middot; @entry.ChangedBy
+                        </p>
+                        @if (!string.IsNullOrWhiteSpace(entry.Notes))
+                        {
+                            <p class="timeline-findings">@entry.Notes</p>
+                        }
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+}
+
+@code {
+    [Parameter]
+    public Guid ApplicationId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
+    private LicenceApplicationDetails? _application;
+    private FacilityCapacityValidationResult? _validation;
+    private IReadOnlyList<ApplicationHistoryEntry> _history = [];
+    private string _notes = string.Empty;
+    private string _reviewer = string.Empty;
+    private bool _isLoading = true;
+    private bool _isBusy;
+    private string? _pageError;
+    private string? _actionMessage;
+    private bool _actionIsError;
+
+    private bool IsSubmittedOnly => _application?.Status == "Submitted";
+
+    private bool CanDecide => _application?.Status is "Submitted" or "UnderReview";
+
+    private bool ApproveDisabled => _isBusy || _validation is null || !_validation.IsValid;
+
+    private int TotalCapacity => _application?.Rooms.Sum(r => r.ProposedCapacity) ?? 0;
+
+    private int TotalRequiredStaff => _validation?.Rooms.Sum(r => r.RequiredStaff) ?? 0;
+
+    private string DecisionTone => _application?.Status switch
+    {
+        "Approved" => "decision-done",
+        "Rejected" or "AdditionalInfoRequired" => "decision-blocked",
+        _ when _validation is null => "decision-neutral",
+        _ => _validation.IsValid ? "decision-ready" : "decision-blocked"
+    };
+
+    private string DecisionTitle => _application?.Status switch
+    {
+        "Approved" => "Approved and licensed",
+        "Rejected" => "Rejected",
+        "AdditionalInfoRequired" => "Waiting on the operator",
+        _ when _validation is { IsValid: false } => "Capacity exceeds the permitted limits",
+        _ => "Ready for a decision"
+    };
+
+    private string DecisionDetail => _application?.Status switch
+    {
+        "Approved" => "A licence has been issued and appears on the public register.",
+        "Rejected" => _application.ReviewerNotes ?? "This application was rejected.",
+        "AdditionalInfoRequired" => _application.ReviewerNotes
+            ?? "The operator has been asked for more information.",
+        _ when _validation is { IsValid: false } =>
+            "At least one room asks for more children than the rules allow, so it cannot be approved.",
+        _ => "Every room is within the staffing ratio, group size and floor area limits."
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateTask;
+        _reviewer = state.User.SignInName();
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _pageError = null;
+
+        try
+        {
+            _application = await ApplicationService.GetAsync(ApplicationId);
+            if (_application is null)
+            {
+                _pageError = "Application not found.";
+                return;
+            }
+
+            _validation = await ApplicationService.ValidateAsync(ApplicationId);
+            _history = await Review.GetHistoryAsync(ApplicationId);
+        }
+        catch (Exception)
+        {
+            _pageError = "Could not load the application. Make sure the database is running.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private Task StartReviewAsync()
+        => ApplyAsync(() => Review.StartReviewAsync(ApplicationId, _reviewer), "Review started.");
+
+    private Task ApproveAsync()
+        => ApplyAsync(
+            () => Review.ApproveAsync(ApplicationId, _reviewer, NullIfBlank(_notes)),
+            "Application approved.");
+
+    private Task RequestInformationAsync()
+        => ApplyAsync(
+            () => Review.RequestMoreInformationAsync(ApplicationId, _reviewer, _notes),
+            "The operator has been asked for more information.");
+
+    private Task RejectAsync()
+        => ApplyAsync(
+            () => Review.RejectAsync(ApplicationId, _reviewer, _notes),
+            "Application rejected.");
+
+    private async Task ApplyAsync(Func<Task<ReviewDecisionResult>> action, string successMessage)
+    {
+        _isBusy = true;
+        _actionMessage = null;
+
+        try
+        {
+            var result = await action();
+
+            _actionIsError = !result.Succeeded;
+            _actionMessage = result.Succeeded
+                ? result.LicenceNumber is null
+                    ? successMessage
+                    : $"{successMessage} Licence {result.LicenceNumber} issued."
+                : result.ErrorMessage;
+
+            if (result.Succeeded)
+            {
+                _notes = string.Empty;
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private static string? NullIfBlank(string value)
+        => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static string FormatAgeGroup(string ageGroup)
+        => ageGroup == "SchoolAge" ? "School age" : ageGroup;
+
+    private static string Describe(string status) => status switch
+    {
+        "AdditionalInfoRequired" => "More information needed",
+        "UnderReview" => "Under review",
+        _ => status
+    };
+
+    private static string TimelineTone(string status) => status switch
+    {
+        "Rejected" => "is-critical",
+        "AdditionalInfoRequired" => "is-warn",
+        _ => string.Empty
+    };
+}

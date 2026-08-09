@@ -7,12 +7,34 @@ public sealed class FacilityQueryService(ApplicationDbContext dbContext) : IFaci
 {
     private const string Unlicensed = "Unlicensed";
 
-    public async Task<IReadOnlyList<FacilitySummary>> ListAsync(CancellationToken cancellationToken = default)
-        => await Project(dbContext.Facilities.OrderBy(f => f.Name)).ToListAsync(cancellationToken);
+    public async Task<IReadOnlyList<FacilitySummary>> ListAsync(
+        Guid? operatorId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.Facilities.AsQueryable();
+
+        if (operatorId is { } id)
+        {
+            query = query.Where(f => f.OperatorId == id);
+        }
+
+        return await Project(query.OrderBy(f => f.Name)).ToListAsync(cancellationToken);
+    }
 
     public async Task<FacilitySummary?> GetAsync(Guid facilityId, CancellationToken cancellationToken = default)
         => await Project(dbContext.Facilities.Where(f => f.Id == facilityId))
             .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<Guid?> GetOwningOperatorIdAsync(
+        Guid facilityId,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Facilities
+            .AsNoTracking()
+            .Where(f => f.Id == facilityId)
+            .Select(f => (Guid?)f.OperatorId)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 
     private static IQueryable<FacilitySummary> Project(IQueryable<Domain.Entities.Facility> query)
     {

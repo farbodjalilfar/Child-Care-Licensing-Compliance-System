@@ -7,15 +7,15 @@ namespace ChildCareLicensing.IntegrationTests;
 
 public class LicenceApplicationQueryTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
-    private static readonly Guid SampleApplicationId = Guid.Parse("55555555-5555-5555-5555-555555555555");
-
-    private readonly HttpClient client = factory.CreateClient();
+    private readonly HttpClient client = factory.CreateClientAs(
+        TestIdentities.OperatorRole,
+        TestIdentities.SunshineOperatorId);
 
     [Fact]
     public async Task Get_ReturnsDraftApplicationWithRooms()
     {
         var application = await client.GetFromJsonAsync<LicenceApplicationDetails>(
-            $"/api/licence-applications/{SampleApplicationId}");
+            $"/api/licence-applications/{TestIdentities.SunshineApplicationId}");
 
         Assert.NotNull(application);
         Assert.Equal("Draft", application.Status);
@@ -35,7 +35,7 @@ public class LicenceApplicationQueryTests(ApiFactory factory) : IClassFixture<Ap
     public async Task Validation_ReturnsPerRoomCapacityResults()
     {
         var validation = await client.GetFromJsonAsync<FacilityCapacityValidationResult>(
-            $"/api/licence-applications/{SampleApplicationId}/validation");
+            $"/api/licence-applications/{TestIdentities.SunshineApplicationId}/validation");
 
         Assert.NotNull(validation);
         Assert.True(validation.IsValid);
@@ -49,25 +49,36 @@ public class LicenceApplicationQueryTests(ApiFactory factory) : IClassFixture<Ap
     [Fact]
     public async Task Validation_UnknownApplication_Returns404()
     {
-        var response = await client.GetAsync($"/api/licence-applications/{Guid.NewGuid()}/validation");
+        var response = await client.GetAsync(
+            $"/api/licence-applications/{Guid.NewGuid()}/validation");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
-    public async Task Facilities_ReturnsSeededFacilities()
+    public async Task Facilities_ReturnsOnlyTheSignedInOperatorsCentres()
     {
-        var response = await client.GetAsync("/api/facilities");
+        var body = await client.GetStringAsync("/api/facilities");
 
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("Sunshine Early Learning Centre", body);
+        Assert.DoesNotContain("Maple Grove Children's Centre", body);
+    }
+
+    [Fact]
+    public async Task Facilities_ForMinistryStaff_ReturnsTheWholeRegister()
+    {
+        var ministry = factory.CreateClientAs(TestIdentities.ReviewerRole);
+
+        var body = await ministry.GetStringAsync("/api/facilities");
+
+        Assert.Contains("Sunshine Early Learning Centre", body);
+        Assert.Contains("Maple Grove Children's Centre", body);
     }
 
     [Fact]
     public async Task Health_ReportsHealthy()
     {
-        var response = await client.GetAsync("/health");
+        var response = await factory.CreateClient().GetAsync("/health");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -77,7 +88,10 @@ public class LicenceApplicationQueryTests(ApiFactory factory) : IClassFixture<Ap
     [InlineData(5000)]
     public async Task Reports_RejectInvalidLookbackWindow(int lookbackDays)
     {
-        var response = await client.GetAsync($"/api/reports/violations-by-category?lookbackDays={lookbackDays}");
+        var ministry = factory.CreateClientAs(TestIdentities.InspectorRole);
+
+        var response = await ministry.GetAsync(
+            $"/api/reports/violations-by-category?lookbackDays={lookbackDays}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

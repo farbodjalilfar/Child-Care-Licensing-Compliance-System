@@ -1,4 +1,5 @@
 using ChildCareLicensing.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -46,7 +47,32 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             connection.Open();
 
             services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(connection));
+
+            // Swap the cookie scheme for a header-driven one. The authorization policies under
+            // test are the production ones; only the way an identity arrives changes.
+            services.AddAuthentication(TestAuthHandler.SchemeName)
+                .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
+                    TestAuthHandler.SchemeName, _ => { });
         });
+    }
+
+    /// <summary>A client that presents the given role on every request.</summary>
+    public HttpClient CreateClientAs(string role, Guid? operatorId = null, string? email = null)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Add(TestAuthHandler.RoleHeader, role);
+
+        if (operatorId is { } id)
+        {
+            client.DefaultRequestHeaders.Add(TestAuthHandler.OperatorHeader, id.ToString());
+        }
+
+        if (email is not null)
+        {
+            client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, email);
+        }
+
+        return client;
     }
 
     async Task IAsyncLifetime.InitializeAsync()

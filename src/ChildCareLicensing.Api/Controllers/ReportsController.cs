@@ -1,4 +1,6 @@
+using ChildCareLicensing.Api.Security;
 using ChildCareLicensing.Application.Reporting;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ChildCareLicensing.Api.Controllers;
@@ -7,6 +9,7 @@ namespace ChildCareLicensing.Api.Controllers;
 /// Compliance reports for ministry staff. Backed by stored procedures via Dapper.
 /// </summary>
 [ApiController]
+[Authorize(Policy = AuthorizationPolicies.Ministry)]
 [Route("api/reports")]
 [Produces("application/json")]
 public class ReportsController(IComplianceReportService reports) : ControllerBase

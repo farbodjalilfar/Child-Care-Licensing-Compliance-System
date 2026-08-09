@@ -1,0 +1,43 @@
+@using ChildCareLicensing.Api.Security
+@inject NavigationManager Navigation
+
+<div class="sign-in-status">
+    <AuthorizeView>
+        <Authorized>
+            <span class="signed-in-user">
+                <span class="signed-in-name">@context.User.DisplayName()</span>
+                <span class="signed-in-role">@RoleLabel(context.User)</span>
+            </span>
+            @* A plain form post: signing out has to reach the server to clear the cookie. *@
+            <form method="post" action="/account/logout">
+                <AntiforgeryToken />
+                <button type="submit" class="link-button">Sign out</button>
+            </form>
+        </Authorized>
+        <NotAuthorized>
+            <a class="sign-in-link" href="@LoginLink">Sign in</a>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+
+@code {
+    private string LoginLink
+    {
+        get
+        {
+            var relative = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+
+            return relative is "/" || relative.StartsWith("/account/", StringComparison.Ordinal)
+                ? "/account/login"
+                : $"/account/login?returnUrl={Uri.EscapeDataString(relative)}";
+        }
+    }
+
+    private static string RoleLabel(System.Security.Claims.ClaimsPrincipal user) => user switch
+    {
+        _ when user.IsInRole("Operator") => "Operator",
+        _ when user.IsInRole("Reviewer") => "Ministry reviewer",
+        _ when user.IsInRole("Inspector") => "Ministry inspector",
+        _ => "Signed in"
+    };
+}

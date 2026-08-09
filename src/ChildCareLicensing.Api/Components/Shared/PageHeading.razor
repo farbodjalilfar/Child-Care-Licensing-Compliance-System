@@ -22,10 +22,14 @@
     [Parameter]
     public AudienceKind Audience { get; set; } = AudienceKind.Public;
 
+    /// <summary>Overrides the default wording, for pages that serve more than one audience.</summary>
+    [Parameter]
+    public string? AudienceLabel { get; set; }
+
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
 
-    private string Label => Audience switch
+    private string Label => AudienceLabel ?? Audience switch
     {
         AudienceKind.Operator => "Operator view",
         AudienceKind.Ministry => "Ministry staff view",

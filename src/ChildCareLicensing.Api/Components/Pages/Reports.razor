@@ -1,4 +1,5 @@
 @page "/reports"
+@attribute [Authorize(Policy = AuthorizationPolicies.Ministry)]
 @inject IComplianceReportService ReportService
 
 <PageTitle>Compliance - Child Care Licensing</PageTitle>

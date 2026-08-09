@@ -1,0 +1,133 @@
+@page "/review"
+@attribute [Authorize(Policy = AuthorizationPolicies.Reviewer)]
+@inject ILicenceApplicationReviewService Review
+
+<PageTitle>Application queue - Child Care Licensing</PageTitle>
+
+<PageHeading Title="Application queue" Audience="PageHeading.AudienceKind.Ministry">
+    Applications waiting for a licensing decision, oldest first.
+</PageHeading>
+
+@if (queue is null)
+{
+    <p role="status" aria-live="polite">Loading the queue...</p>
+}
+else if (loadError is not null)
+{
+    <div class="alert alert-error" role="alert">@loadError</div>
+}
+else if (queue.Count == 0)
+{
+    <div class="empty-state">
+        <h2>Nothing waiting</h2>
+        <p>Every submitted application has been decided. New submissions appear here automatically.</p>
+    </div>
+}
+else
+{
+    <section aria-label="Queue summary">
+        <div class="tiles">
+            <div class="tile">
+                <p class="tile-value">@queue.Count</p>
+                <p class="tile-label">Awaiting a decision</p>
+            </div>
+            <div class="tile @(NotPickedUp > 0 ? "tile-warn" : "")">
+                <p class="tile-value">@NotPickedUp</p>
+                <p class="tile-label">Not yet picked up</p>
+            </div>
+            <div class="tile">
+                <p class="tile-value">@OldestWaitingDays</p>
+                <p class="tile-label">Days waiting, oldest</p>
+            </div>
+        </div>
+    </section>
+
+    <div class="table-wrap">
+        <table>
+            <caption class="visually-hidden">Licence applications awaiting review</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Centre</th>
+                    <th scope="col">Operator</th>
+                    <th scope="col">Submitted</th>
+                    <th scope="col">Rooms</th>
+                    <th scope="col">Capacity requested</th>
+                    <th scope="col">Status</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in queue)
+                {
+                    <tr>
+                        <th scope="row">
+                            @item.FacilityName
+                            <span class="cell-note">@item.City</span>
+                        </th>
+                        <td>@item.OperatorName</td>
+                        <td>@FormatWait(item.SubmittedAtUtc)</td>
+                        <td>@item.RoomCount</td>
+                        <td>@item.RequestedCapacity children</td>
+                        <td><StatusBadge Status="@item.Status" /></td>
+                        <td>
+                            <a class="button button-secondary button-small"
+                               href="/review/@item.ApplicationId">
+                                Open
+                                <span class="visually-hidden"> the application for @item.FacilityName</span>
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<ReviewQueueItem>? queue;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            queue = await Review.GetQueueAsync();
+        }
+        catch (Exception)
+        {
+            queue = [];
+            loadError = "Could not load the queue. Make sure the database is running.";
+        }
+    }
+
+    private int NotPickedUp => queue?.Count(q => q.Status == "Submitted") ?? 0;
+
+    private int OldestWaitingDays
+    {
+        get
+        {
+            var oldest = queue?
+                .Where(q => q.SubmittedAtUtc.HasValue)
+                .Min(q => q.SubmittedAtUtc);
+
+            return oldest is null ? 0 : (int)Math.Floor((DateTime.UtcNow - oldest.Value).TotalDays);
+        }
+    }
+
+    private static string FormatWait(DateTime? submittedAtUtc)
+    {
+        if (submittedAtUtc is null)
+        {
+            return "Not recorded";
+        }
+
+        var days = (int)Math.Floor((DateTime.UtcNow - submittedAtUtc.Value).TotalDays);
+
+        return days switch
+        {
+            <= 0 => "Today",
+            1 => "Yesterday",
+            _ => $"{days} days ago"
+        };
+    }
+}

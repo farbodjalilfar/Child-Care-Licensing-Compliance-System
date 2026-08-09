@@ -10,9 +10,12 @@ namespace ChildCareLicensing.IntegrationTests;
 /// </summary>
 public class LicenceApplicationSubmissionTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
-    private static readonly Guid SampleApplicationId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+    private static readonly Guid SampleApplicationId = TestIdentities.SunshineApplicationId;
 
-    private readonly HttpClient client = factory.CreateClient();
+    private readonly HttpClient client = factory.CreateClientAs(
+        TestIdentities.OperatorRole,
+        TestIdentities.SunshineOperatorId,
+        "maria@sunshinechildcare.example");
 
     [Fact]
     public async Task Submit_ApprovesCapacityAndBlocksResubmission()
