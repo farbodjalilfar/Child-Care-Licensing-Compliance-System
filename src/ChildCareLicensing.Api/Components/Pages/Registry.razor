@@ -1,27 +1,25 @@
 @page "/registry"
 @inject IPublicRegistryService RegistryService
 
-<PageTitle>Public register - Child Care Licensing</PageTitle>
+<PageTitle>Find a licensed centre - Child Care Licensing</PageTitle>
 
-<h1>Find a licensed child care centre</h1>
-
-<p class="lead">
-    Search the public register of licensed child care centres. Results show the current
-    licence status and any findings that are still open.
-</p>
+<PageHeading Title="Find a licensed child care centre" Audience="PageHeading.AudienceKind.Public">
+    Search the public register to check whether a centre is licensed, when its licence
+    expires, and what inspectors have found.
+</PageHeading>
 
 <form class="filter-form" role="search" @onsubmit="SearchAsync" @onsubmit:preventDefault="true">
     <div class="field">
         <label for="city">City</label>
-        <input id="city" type="search" @bind="city" @bind:event="oninput" placeholder="e.g. Toronto" />
+        <input id="city" type="search" @bind="city" @bind:event="oninput" placeholder="Toronto" />
     </div>
     <div class="field">
         <label for="name">Centre name</label>
-        <input id="name" type="search" @bind="name" @bind:event="oninput" placeholder="e.g. Maple" />
+        <input id="name" type="search" @bind="name" @bind:event="oninput" placeholder="Maple" />
     </div>
     <div class="field field-actions">
         <button type="submit" class="button">Search</button>
-        <button type="button" class="button button-secondary" @onclick="ResetAsync">Reset</button>
+        <button type="button" class="button button-secondary" @onclick="ResetAsync">Clear</button>
     </div>
 </form>
 
@@ -35,40 +33,43 @@ else if (loadError is not null)
 }
 else if (results.Count == 0)
 {
-    <p role="status" aria-live="polite">No centres match your search.</p>
+    <div class="empty-state">
+        <h2>No centres found</h2>
+        <p>No centre on the register matches that city or name. Try a broader search.</p>
+    </div>
 }
 else
 {
-    <p role="status" aria-live="polite">@results.Count centre(s) found.</p>
+    <p class="result-count" role="status" aria-live="polite">
+        Showing @results.Count centre@(results.Count == 1 ? "" : "s")
+    </p>
 
-    <div class="table-wrap">
-        <table>
-            <caption class="visually-hidden">Licensed child care centres</caption>
-            <thead>
-                <tr>
-                    <th scope="col">Centre</th>
-                    <th scope="col">City</th>
-                    <th scope="col">Licence</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Expires</th>
-                    <th scope="col">Open findings</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var facility in results)
-                {
-                    <tr>
-                        <td><a href="/registry/@facility.FacilityId">@facility.Name</a></td>
-                        <td>@facility.City</td>
-                        <td>@(facility.LicenceNumber ?? "—")</td>
-                        <td><span class="badge @BadgeClass(facility.LicenceStatus)">@facility.LicenceStatus</span></td>
-                        <td>@Format(facility.LicenceExpiresAtUtc)</td>
-                        <td>@facility.OpenViolations</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
+    <ul class="result-list">
+        @foreach (var facility in results)
+        {
+            <li class="result-card">
+                <div class="result-main">
+                    <h2><a href="/registry/@facility.FacilityId">@facility.Name</a></h2>
+                    <p class="result-meta">@facility.City, @facility.Province</p>
+                    <p class="result-meta">
+                        Licence @(facility.LicenceNumber ?? "not issued")
+                        @if (facility.LicenceExpiresAtUtc is { } expiry)
+                        {
+                            <span> &middot; expires @expiry.ToString("MMMM d, yyyy")</span>
+                        }
+                    </p>
+                </div>
+                <div class="result-side">
+                    <StatusBadge Status="@facility.LicenceStatus" />
+                    <p class="result-findings @(facility.OpenViolations > 0 ? "text-error" : "")">
+                        @(facility.OpenViolations == 0
+                            ? "No outstanding findings"
+                            : $"{facility.OpenViolations} outstanding finding{(facility.OpenViolations == 1 ? "" : "s")}")
+                    </p>
+                </div>
+            </li>
+        }
+    </ul>
 }
 
 @code {
@@ -105,13 +106,4 @@ else
         name = null;
         return SearchAsync();
     }
-
-    private static string Format(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? "—";
-
-    private static string BadgeClass(string status) => status switch
-    {
-        "Active" => "badge-ok",
-        "Expired" or "Revoked" => "badge-error",
-        _ => "badge-warn"
-    };
 }

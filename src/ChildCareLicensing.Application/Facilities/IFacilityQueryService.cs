@@ -5,7 +5,11 @@ public sealed record FacilitySummary(
     string Name,
     string City,
     string Province,
-    int RoomCount);
+    int RoomCount,
+    int LicensedCapacity,
+    string LicenceStatus,
+    DateTime? LicenceExpiresAtUtc,
+    string? ApplicationStatus);
 
 public interface IFacilityQueryService
 {

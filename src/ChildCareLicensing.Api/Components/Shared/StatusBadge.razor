@@ -1,0 +1,15 @@
+<span class="badge @Tone">@Status</span>
+
+@code {
+    [Parameter]
+    public required string Status { get; set; }
+
+    private string Tone => Status switch
+    {
+        "Active" or "Approved" or "Remediated" or "Low" => "badge-ok",
+        "Expired" or "Revoked" or "Rejected" or "Escalated" or "High" or "Critical" => "badge-error",
+        "Suspended" or "AdditionalInfoRequired" or "Medium" or "Open" => "badge-warn",
+        "Submitted" or "UnderReview" => "badge-info",
+        _ => "badge-neutral"
+    };
+}

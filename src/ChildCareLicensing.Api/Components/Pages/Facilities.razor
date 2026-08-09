@@ -1,13 +1,15 @@
 @page "/facilities"
 @inject IFacilityQueryService FacilityQuery
 
-<PageTitle>Facilities - Child Care Licensing</PageTitle>
+<PageTitle>My centres - Child Care Licensing</PageTitle>
 
-<h1>My facilities</h1>
+<PageHeading Title="My centres" Audience="PageHeading.AudienceKind.Operator">
+    The centres registered to you, with the state of each licence and application.
+</PageHeading>
 
 @if (isLoading)
 {
-    <p role="status" aria-live="polite">Loading facilities...</p>
+    <p role="status" aria-live="polite">Loading centres...</p>
 }
 else if (loadError is not null)
 {
@@ -15,19 +17,24 @@ else if (loadError is not null)
 }
 else if (facilities.Count == 0)
 {
-    <p role="status">No facilities found.</p>
+    <div class="empty-state">
+        <h2>No centres registered</h2>
+        <p>Once a centre is registered it will appear here with its licence status.</p>
+    </div>
 }
 else
 {
     <div class="table-wrap">
         <table>
-            <caption class="visually-hidden">Registered child care facilities</caption>
+            <caption class="visually-hidden">Registered child care centres</caption>
             <thead>
                 <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">City</th>
-                    <th scope="col">Province</th>
+                    <th scope="col">Centre</th>
+                    <th scope="col">Location</th>
                     <th scope="col">Rooms</th>
+                    <th scope="col">Licensed capacity</th>
+                    <th scope="col">Licence</th>
+                    <th scope="col">Application</th>
                     <th scope="col"><span class="visually-hidden">Actions</span></th>
                 </tr>
             </thead>
@@ -35,12 +42,33 @@ else
                 @foreach (var facility in facilities)
                 {
                     <tr>
-                        <td>@facility.Name</td>
-                        <td>@facility.City</td>
-                        <td>@facility.Province</td>
+                        <th scope="row">@facility.Name</th>
+                        <td>@facility.City, @facility.Province</td>
                         <td>@facility.RoomCount</td>
+                        <td>@(facility.LicensedCapacity > 0 ? $"{facility.LicensedCapacity} children" : "Not yet set")</td>
                         <td>
-                            <a href="/facilities/@facility.Id/application">View application</a>
+                            <StatusBadge Status="@facility.LicenceStatus" />
+                            @if (facility.LicenceExpiresAtUtc is { } expiry)
+                            {
+                                <span class="cell-note">expires @expiry.ToString("yyyy-MM-dd")</span>
+                            }
+                        </td>
+                        <td>
+                            @if (facility.ApplicationStatus is { } status)
+                            {
+                                <StatusBadge Status="@status" />
+                            }
+                            else
+                            {
+                                <span class="cell-note">None</span>
+                            }
+                        </td>
+                        <td>
+                            <a class="button button-secondary button-small"
+                               href="/facilities/@facility.Id/application">
+                                Open application
+                                <span class="visually-hidden"> for @facility.Name</span>
+                            </a>
                         </td>
                     </tr>
                 }
@@ -62,7 +90,7 @@ else
         }
         catch (Exception)
         {
-            loadError = "Could not load facilities. Make sure the database is running.";
+            loadError = "Could not load centres. Make sure the database is running.";
         }
         finally
         {

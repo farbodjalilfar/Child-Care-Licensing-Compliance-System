@@ -1,39 +1,88 @@
 @page "/"
 
-<PageTitle>Home - Child Care Licensing</PageTitle>
+<PageTitle>Child Care Licensing and Compliance</PageTitle>
 
-<h1>Child care licensing and compliance</h1>
+<div class="hero">
+    <h1>Licensing and compliance for child care centres</h1>
+    <p class="lead">
+        A demonstration of how a centre is licensed and monitored: an operator applies, the
+        requested capacity is checked against staffing-ratio and floor-area rules, inspectors
+        record findings, ministry staff track compliance risk, and the public can look up any
+        centre on the register.
+    </p>
+</div>
 
-<p class="lead">
-    A demo portal for licensing child care centres. Operators register a facility, have room
-    capacity checked against provincial-style rules, and submit an application for review.
-    Ministry staff track compliance risk, and the public can look up any licensed centre.
-</p>
+<section aria-labelledby="audiences-heading">
+    <h2 id="audiences-heading">Choose where to start</h2>
 
-<section aria-labelledby="quick-start-heading">
-    <h2 id="quick-start-heading">Try it</h2>
-    <ol>
-        <li>Open <a href="/facilities">My facilities</a> and pick a centre.</li>
-        <li>Review the rooms and run capacity validation against the ratio and floor-area rules.</li>
-        <li>Submit the application once every room passes.</li>
-        <li>Check the <a href="/reports">compliance reports</a> and the <a href="/registry">public register</a>.</li>
-    </ol>
+    <div class="card-grid">
+        <article class="entry-card">
+            <p class="audience audience-operator">Operator view</p>
+            <h3><a href="/facilities">Apply to license a centre</a></h3>
+            <p>
+                Review the rooms in your centre, run the capacity check, and submit an
+                application once every room passes.
+            </p>
+            <p class="entry-hint">Start with Sunshine Early Learning Centre, which has a draft application.</p>
+        </article>
 
-    <a class="button" href="/facilities/22222222-2222-2222-2222-222222222222/application">
-        Open the sample application
-    </a>
+        <article class="entry-card">
+            <p class="audience audience-ministry">Ministry staff view</p>
+            <h3><a href="/reports">Monitor compliance</a></h3>
+            <p>
+                Rank centres by risk: overdue findings, lapsed licences, upcoming expiries,
+                and centres that have gone a year without an inspection.
+            </p>
+            <p class="entry-hint">Both reports are produced by SQL Server stored procedures.</p>
+        </article>
+
+        <article class="entry-card">
+            <p class="audience audience-public">Public view</p>
+            <h3><a href="/registry">Find a licensed centre</a></h3>
+            <p>
+                Search the register by city or centre name to see licence status, expiry date,
+                and inspection history. No account needed.
+            </p>
+            <p class="entry-hint">Operator contact details and reviewer notes are never shown here.</p>
+        </article>
+    </div>
 </section>
 
-<section aria-labelledby="how-heading">
-    <h2 id="how-heading">How it is built</h2>
-    <ul>
-        <li>ASP.NET Core Web API and Blazor Server on .NET 10, in a layered solution.</li>
-        <li>The capacity rules engine lives in the domain layer with no infrastructure dependencies.</li>
-        <li>EF Core handles transactional work; Dapper and stored procedures handle reporting.</li>
-        <li>A background worker expires licences, issues renewal notices and escalates overdue findings.</li>
-    </ul>
+<section aria-labelledby="rules-heading">
+    <h2 id="rules-heading">The rules being applied</h2>
     <p>
-        API documentation is available at <a href="/openapi/v1.json">/openapi/v1.json</a> and the
-        health probe at <a href="/health">/health</a>.
+        Each room is checked against three limits and the lowest one decides the licensed
+        capacity. These are simplified from the age-group requirements under the
+        <em>Child Care and Early Years Act</em>.
     </p>
+
+    <div class="table-wrap">
+        <table>
+            <caption class="visually-hidden">Capacity rules by age group</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Age group</th>
+                    <th scope="col">Staff to children</th>
+                    <th scope="col">Maximum group size</th>
+                    <th scope="col">Floor area per child</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><th scope="row">Infant</th><td>1 : 3</td><td>12</td><td>2.5 m&sup2;</td></tr>
+                <tr><th scope="row">Toddler</th><td>1 : 5</td><td>15</td><td>2.5 m&sup2;</td></tr>
+                <tr><th scope="row">Preschool</th><td>1 : 8</td><td>16</td><td>2.8 m&sup2;</td></tr>
+                <tr><th scope="row">School age</th><td>1 : 15</td><td>26</td><td>2.8 m&sup2;</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section aria-labelledby="build-heading">
+    <h2 id="build-heading">How it is built</h2>
+    <ul class="plain-list">
+        <li>ASP.NET Core Web API and Blazor Server on .NET 10, in a layered solution.</li>
+        <li>The capacity rules engine sits in the domain layer with no infrastructure dependencies.</li>
+        <li>Entity Framework Core handles transactional work; Dapper and stored procedures handle reporting.</li>
+        <li>A background worker expires licences, issues renewal notices, and escalates overdue findings.</li>
+    </ul>
 </section>

@@ -3,14 +3,20 @@
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
 <div class="layout">
-    <header class="site-header">
-        <div class="brand">
-            <span class="brand-mark" aria-hidden="true">ON</span>
-            <div>
-                <p class="brand-title">Child Care Licensing</p>
-                <p class="brand-subtitle">Operator portal (demo)</p>
-            </div>
+    <div class="masthead">
+        <div class="masthead-inner">
+            <a class="brand" href="/">
+                <span class="brand-mark" aria-hidden="true">CCL</span>
+                <span class="brand-text">
+                    <span class="brand-title">Child Care Licensing and Compliance</span>
+                    <span class="brand-subtitle">Licensing, inspection and public register</span>
+                </span>
+            </a>
+            <p class="demo-tag">Demo &mdash; sample data only</p>
         </div>
+    </div>
+
+    <header class="site-header">
         <NavMenu />
     </header>
 
@@ -19,6 +25,16 @@
     </main>
 
     <footer class="site-footer">
-        <p>Personal learning project. Not affiliated with the Government of Ontario.</p>
+        <div class="footer-inner">
+            <p>
+                Personal learning project. Not affiliated with, endorsed by, or connected to
+                the Government of Ontario.
+            </p>
+            <p class="footer-links">
+                <a href="/health">Service health</a>
+                <span aria-hidden="true">&middot;</span>
+                <a href="/openapi/v1.json">API documentation</a>
+            </p>
+        </div>
     </footer>
 </div>

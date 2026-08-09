@@ -1,14 +1,12 @@
 @page "/reports"
 @inject IComplianceReportService ReportService
 
-<PageTitle>Compliance reports - Child Care Licensing</PageTitle>
+<PageTitle>Compliance - Child Care Licensing</PageTitle>
 
-<h1>Compliance reports</h1>
-
-<p class="lead">
-    These reports are produced by SQL Server stored procedures and read through Dapper, so
-    the aggregation runs in the database rather than in application memory.
-</p>
+<PageHeading Title="Compliance overview" Audience="PageHeading.AudienceKind.Ministry">
+    Where inspection effort should go next. Both reports are produced by SQL Server stored
+    procedures, so the aggregation runs in the database rather than in application memory.
+</PageHeading>
 
 @if (isLoading)
 {
@@ -20,37 +18,58 @@ else if (loadError is not null)
 }
 else
 {
+    <ul class="tiles" aria-label="Summary">
+        <li class="tile @(HighRisk > 0 ? "tile-error" : "")">
+            <span class="tile-value">@HighRisk</span>
+            <span class="tile-label">Centres at high risk</span>
+        </li>
+        <li class="tile @(OverdueFindings > 0 ? "tile-error" : "")">
+            <span class="tile-value">@OverdueFindings</span>
+            <span class="tile-label">Findings past their deadline</span>
+        </li>
+        <li class="tile @(ExpiringSoon > 0 ? "tile-warn" : "")">
+            <span class="tile-value">@ExpiringSoon</span>
+            <span class="tile-label">Licences expiring within 90 days</span>
+        </li>
+        <li class="tile @(InspectionOverdue > 0 ? "tile-warn" : "")">
+            <span class="tile-value">@InspectionOverdue</span>
+            <span class="tile-label">Not inspected in over a year</span>
+        </li>
+    </ul>
+
     <section aria-labelledby="risk-heading">
-        <h2 id="risk-heading">Facility compliance summary</h2>
-        <p class="hint">Source: <code>dbo.usp_FacilityComplianceSummary</code></p>
+        <div class="section-heading">
+            <h2 id="risk-heading">Centres by risk</h2>
+            <p class="source">Source: <code>dbo.usp_FacilityComplianceSummary</code></p>
+        </div>
 
         <div class="table-wrap">
             <table>
-                <caption class="visually-hidden">Compliance risk by facility</caption>
+                <caption class="visually-hidden">Compliance risk by centre, highest first</caption>
                 <thead>
                     <tr>
-                        <th scope="col">Facility</th>
+                        <th scope="col">Risk</th>
+                        <th scope="col">Centre</th>
                         <th scope="col">City</th>
                         <th scope="col">Licence</th>
-                        <th scope="col">Expires in</th>
+                        <th scope="col">Expiry</th>
                         <th scope="col">Last inspection</th>
                         <th scope="col">Open</th>
                         <th scope="col">Overdue</th>
-                        <th scope="col">Risk</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var row in facilityCompliance)
                     {
                         <tr>
-                            <td>@row.FacilityName</td>
+                            <td><StatusBadge Status="@row.RiskLevel" /></td>
+                            <th scope="row">@row.FacilityName</th>
                             <td>@row.City</td>
-                            <td>@row.LicenceStatus</td>
-                            <td>@FormatDays(row.DaysUntilExpiry)</td>
-                            <td>@Format(row.LastInspectionDateUtc)</td>
+                            <td><StatusBadge Status="@row.LicenceStatus" /></td>
+                            <td>@FormatExpiry(row.DaysUntilExpiry)</td>
+                            <td>@FormatInspection(row.LastInspectionDateUtc)</td>
                             <td>@row.OpenViolations</td>
-                            <td>@row.OverdueViolations</td>
-                            <td><span class="badge @RiskClass(row.RiskLevel)">@row.RiskLevel</span></td>
+                            <td class="@(row.OverdueViolations > 0 ? "text-error" : "")">@row.OverdueViolations</td>
                         </tr>
                     }
                 </tbody>
@@ -59,14 +78,19 @@ else
     </section>
 
     <section aria-labelledby="violations-heading">
-        <h2 id="violations-heading">Findings by category</h2>
-        <p class="hint">
-            Source: <code>dbo.usp_ViolationsByCategory</code> over the last @lookbackDays days
-        </p>
+        <div class="section-heading">
+            <h2 id="violations-heading">Findings by category</h2>
+            <p class="source">
+                Source: <code>dbo.usp_ViolationsByCategory</code> over the last @LookbackDays days
+            </p>
+        </div>
 
         @if (violationsByCategory.Count == 0)
         {
-            <p>No findings were recorded in this window.</p>
+            <div class="empty-state">
+                <h3>No findings recorded</h3>
+                <p>Nothing was raised by an inspection in this window.</p>
+            </div>
         }
         else
         {
@@ -78,7 +102,7 @@ else
                             <th scope="col">Category</th>
                             <th scope="col">Severity</th>
                             <th scope="col">Total</th>
-                            <th scope="col">Open</th>
+                            <th scope="col">Still open</th>
                             <th scope="col">Overdue</th>
                         </tr>
                     </thead>
@@ -86,11 +110,11 @@ else
                         @foreach (var row in violationsByCategory)
                         {
                             <tr>
-                                <td>@row.Category</td>
-                                <td>@row.Severity</td>
+                                <th scope="row">@row.Category</th>
+                                <td><StatusBadge Status="@row.Severity" /></td>
                                 <td>@row.TotalCount</td>
                                 <td>@row.OpenCount</td>
-                                <td>@row.OverdueCount</td>
+                                <td class="@(row.OverdueCount > 0 ? "text-error" : "")">@row.OverdueCount</td>
                             </tr>
                         }
                     </tbody>
@@ -101,19 +125,30 @@ else
 }
 
 @code {
-    private const int lookbackDays = 365;
+    private const int LookbackDays = 365;
+    private const int ExpiryWarningDays = 90;
 
     private IReadOnlyList<FacilityComplianceRow> facilityCompliance = [];
     private IReadOnlyList<ViolationsByCategoryRow> violationsByCategory = [];
     private bool isLoading = true;
     private string? loadError;
 
+    private int HighRisk => facilityCompliance.Count(r => r.RiskLevel == "High");
+
+    private int OverdueFindings => facilityCompliance.Sum(r => r.OverdueViolations);
+
+    private int ExpiringSoon =>
+        facilityCompliance.Count(r => r.DaysUntilExpiry is >= 0 and <= ExpiryWarningDays);
+
+    private int InspectionOverdue => facilityCompliance.Count(r =>
+        r.LastInspectionDateUtc is null || r.LastInspectionDateUtc < DateTime.UtcNow.AddDays(-365));
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
             facilityCompliance = await ReportService.GetFacilityComplianceAsync();
-            violationsByCategory = await ReportService.GetViolationsByCategoryAsync(lookbackDays);
+            violationsByCategory = await ReportService.GetViolationsByCategoryAsync(LookbackDays);
         }
         catch (Exception)
         {
@@ -125,19 +160,15 @@ else
         }
     }
 
-    private static string Format(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? "Never";
-
-    private static string FormatDays(int? days) => days switch
+    private static string FormatExpiry(int? days) => days switch
     {
-        null => "—",
-        < 0 => $"Expired {Math.Abs(days.Value)} days ago",
-        _ => $"{days} days"
+        null => "No licence",
+        < 0 => $"Lapsed {Math.Abs(days.Value)} days ago",
+        0 => "Expires today",
+        _ => $"In {days} days"
     };
 
-    private static string RiskClass(string risk) => risk switch
-    {
-        "High" => "badge-error",
-        "Medium" => "badge-warn",
-        _ => "badge-ok"
-    };
+    private static string FormatInspection(DateTime? date) => date is null
+        ? "Never"
+        : $"{date.Value:yyyy-MM-dd} ({(int)(DateTime.UtcNow - date.Value).TotalDays} days ago)";
 }

@@ -1,0 +1,34 @@
+@* Every page states who it is for, because the three audiences share one site. *@
+<div class="page-heading">
+    <p class="audience audience-@Audience.ToString().ToLowerInvariant()">@Label</p>
+    <h1>@Title</h1>
+    @if (ChildContent is not null)
+    {
+        <div class="lead">@ChildContent</div>
+    }
+</div>
+
+@code {
+    public enum AudienceKind
+    {
+        Operator,
+        Ministry,
+        Public
+    }
+
+    [Parameter]
+    public required string Title { get; set; }
+
+    [Parameter]
+    public AudienceKind Audience { get; set; } = AudienceKind.Public;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private string Label => Audience switch
+    {
+        AudienceKind.Operator => "Operator view",
+        AudienceKind.Ministry => "Ministry staff view",
+        _ => "Public view"
+    };
+}

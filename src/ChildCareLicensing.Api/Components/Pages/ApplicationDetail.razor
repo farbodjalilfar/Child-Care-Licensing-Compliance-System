@@ -2,7 +2,7 @@
 @inject IFacilityQueryService FacilityQuery
 @inject ILicenceApplicationService ApplicationService
 
-<PageTitle>Application - Child Care Licensing</PageTitle>
+<PageTitle>Licence application - Child Care Licensing</PageTitle>
 
 @if (isLoading)
 {
@@ -15,115 +15,160 @@ else if (pageError is not null)
 else if (facility is not null && application is not null)
 {
     <nav aria-label="Breadcrumb" class="breadcrumb">
-        <a href="/facilities">Facilities</a>
+        <a href="/facilities">My centres</a>
         <span aria-hidden="true"> / </span>
-        <span>@facility.Name</span>
+        <span aria-current="page">@facility.Name</span>
     </nav>
 
-    <h1>@facility.Name</h1>
-    <p class="lead">@facility.City, @facility.Province</p>
+    <PageHeading Title="Licence application" Audience="PageHeading.AudienceKind.Operator">
+        @facility.Name &mdash; @facility.City, @facility.Province
+    </PageHeading>
 
-    <section aria-labelledby="status-heading" class="card">
-        <h2 id="status-heading">Application status</h2>
-        <dl class="status-grid">
+    <ol class="steps" aria-label="Application steps">
+        <li class="step step-done">
+            <span class="step-number" aria-hidden="true">1</span>
+            <span class="step-label">Describe the rooms</span>
+        </li>
+        <li class="step @(validation is null ? "" : validation.IsValid ? "step-done" : "step-blocked")">
+            <span class="step-number" aria-hidden="true">2</span>
+            <span class="step-label">Check capacity against the rules</span>
+        </li>
+        <li class="step @(IsSubmitted ? "step-done" : "")">
+            <span class="step-number" aria-hidden="true">3</span>
+            <span class="step-label">Submit for review</span>
+        </li>
+    </ol>
+
+    <section aria-labelledby="decision-heading" class="decision @DecisionTone">
+        <h2 id="decision-heading">@DecisionTitle</h2>
+        <p>@DecisionDetail</p>
+        <dl class="inline-facts">
             <div>
                 <dt>Status</dt>
-                <dd><span class="badge">@application.Status</span></dd>
+                <dd><StatusBadge Status="@application.Status" /></dd>
             </div>
             <div>
                 <dt>Submitted</dt>
-                <dd>@(application.SubmittedAtUtc?.ToString("u") ?? "Not yet submitted")</dd>
+                <dd>@(application.SubmittedAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "Not yet submitted")</dd>
+            </div>
+            <div>
+                <dt>Total licensed capacity</dt>
+                <dd>@TotalLicensedCapacity children</dd>
+            </div>
+            <div>
+                <dt>Staff required</dt>
+                <dd>@TotalRequiredStaff</dd>
             </div>
         </dl>
     </section>
 
-    <section aria-labelledby="rooms-heading" class="card">
-        <h2 id="rooms-heading">Rooms</h2>
-        @if (application.Rooms.Count == 0)
+    <section aria-labelledby="rooms-heading">
+        <h2 id="rooms-heading">Rooms and capacity check</h2>
+
+        @if (rooms.Count == 0)
         {
-            <p role="status">No rooms have been added to this facility yet.</p>
-        }
-        else
-        {
-            <div class="table-wrap">
-                <table>
-                    <caption class="visually-hidden">Rooms included in this licence application</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">Room</th>
-                            <th scope="col">Age group</th>
-                            <th scope="col">Floor area (sq m)</th>
-                            <th scope="col">Proposed capacity</th>
-                            <th scope="col">Licensed capacity</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var room in application.Rooms)
-                        {
-                            <tr>
-                                <td>@room.Name</td>
-                                <td>@room.AgeGroup</td>
-                                <td>@room.FloorAreaSqM</td>
-                                <td>@room.ProposedCapacity</td>
-                                <td>@(room.LicensedCapacity?.ToString() ?? "—")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="empty-state">
+                <h3>No rooms added</h3>
+                <p>At least one room is required before an application can be submitted.</p>
             </div>
         }
-    </section>
-
-    <section aria-labelledby="validation-heading" class="card">
-        <h2 id="validation-heading">Capacity validation</h2>
-        <p>Rules check floor area, maximum group size, and required staffing for each room.</p>
-
-        @if (validation is null)
-        {
-            <p role="status">Validation has not been run yet.</p>
-        }
         else
         {
-            <p role="status" aria-live="polite" class="@(validation.IsValid ? "text-success" : "text-error")">
-                @(validation.IsValid
-                    ? "All rooms meet the capacity rules."
-                    : "One or more rooms fail the capacity rules.")
-            </p>
-
-            @foreach (var room in validation.Rooms)
+            @foreach (var room in rooms)
             {
-                <article class="validation-card @(room.IsValid ? "valid" : "invalid")" aria-label="@room.RoomName validation">
-                    <h3>@room.RoomName (@room.AgeGroup)</h3>
-                    <ul class="metric-list">
-                        <li>Proposed: @room.ProposedCapacity</li>
-                        <li>Max by floor area: @room.MaxCapacityByFloorArea</li>
-                        <li>Max group size: @room.MaxCapacityByGroupSize</li>
-                        <li>Required staff: @room.RequiredStaff</li>
-                    </ul>
-                    @if (room.Issues.Count > 0)
+                <article class="room-card @(room.Check is null ? "" : room.Check.IsValid ? "is-valid" : "is-invalid")">
+                    <div class="room-card-header">
+                        <div>
+                            <h3>@room.Name</h3>
+                            <p class="room-meta">@FormatAgeGroup(room.AgeGroup) &middot; @FormatArea(room.FloorAreaSqM) m&sup2;</p>
+                        </div>
+                        @if (room.Check is not null)
+                        {
+                            <p class="room-verdict @(room.Check.IsValid ? "text-success" : "text-error")">
+                                @(room.Check.IsValid ? "Meets the rules" : "Exceeds the limit")
+                            </p>
+                        }
+                    </div>
+
+                    @if (room.Check is { } check)
                     {
-                        <ul class="issue-list" role="list">
-                            @foreach (var issue in room.Issues)
-                            {
-                                <li role="listitem">@issue</li>
-                            }
-                        </ul>
+                        <div class="meter" role="img"
+                             aria-label="Proposed @check.ProposedCapacity children against a limit of @check.MaxAllowedCapacity.">
+                            <div class="meter-track">
+                                <div class="meter-fill @(check.IsValid ? "" : "over")"
+                                     style="width: @MeterWidth(check)%"></div>
+                            </div>
+                            <p class="meter-caption">
+                                Proposed <strong>@check.ProposedCapacity</strong> of a permitted
+                                <strong>@check.MaxAllowedCapacity</strong>
+                            </p>
+                        </div>
+
+                        <table class="rule-table">
+                            <caption class="visually-hidden">How each limit applies to @room.Name</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Limit</th>
+                                    <th scope="col">Allows</th>
+                                    <th scope="col">How it is worked out</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="@(IsBinding(check, check.MaxCapacityByFloorArea) ? "binding" : "")">
+                                    <th scope="row">Floor area</th>
+                                    <td>@check.MaxCapacityByFloorArea</td>
+                                    <td>@FormatArea(room.FloorAreaSqM) m&sup2; divided by the minimum area per child</td>
+                                </tr>
+                                <tr class="@(IsBinding(check, check.MaxCapacityByGroupSize) ? "binding" : "")">
+                                    <th scope="row">Group size</th>
+                                    <td>@check.MaxCapacityByGroupSize</td>
+                                    <td>Maximum group size for @FormatAgeGroup(room.AgeGroup)</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Staffing</th>
+                                    <td>@check.RequiredStaff staff</td>
+                                    <td>Required for @(check.LicensedCapacity > 0 ? check.LicensedCapacity : check.ProposedCapacity) children at this age group's ratio</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        @if (check.Issues.Count > 0)
+                        {
+                            <div class="alert alert-error" role="alert">
+                                <p class="alert-title">This room cannot be licensed as proposed</p>
+                                <ul class="issue-list">
+                                    @foreach (var issue in check.Issues)
+                                    {
+                                        <li>@issue</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="room-meta">Proposed capacity @room.ProposedCapacity. Run the capacity check to see the result.</p>
                     }
                 </article>
             }
         }
     </section>
 
-    <section aria-labelledby="actions-heading" class="actions">
+    <section aria-labelledby="actions-heading" class="action-bar">
         <h2 id="actions-heading" class="visually-hidden">Actions</h2>
         <button type="button" class="button button-secondary" @onclick="RunValidationAsync" disabled="@isBusy">
-            Re-run validation
+            Re-run capacity check
         </button>
-        @if (string.Equals(application.Status, "Draft", StringComparison.Ordinal))
+        @if (!IsSubmitted)
         {
-            <button type="button" class="button" @onclick="SubmitApplicationAsync" disabled="@isBusy">
+            <button type="button" class="button" @onclick="SubmitApplicationAsync"
+                    disabled="@(isBusy || validation is null || !validation.IsValid)">
                 Submit application
             </button>
+            @if (validation is not null && !validation.IsValid)
+            {
+                <p class="action-hint">Fix the rooms above before submitting.</p>
+            }
         }
     </section>
 
@@ -139,19 +184,49 @@ else if (facility is not null && application is not null)
     [Parameter]
     public Guid FacilityId { get; set; }
 
+    private sealed record RoomView(
+        string Name,
+        string AgeGroup,
+        decimal FloorAreaSqM,
+        int ProposedCapacity,
+        RoomCapacityValidationResult? Check);
+
     private FacilitySummary? facility;
     private LicenceApplicationDetails? application;
     private FacilityCapacityValidationResult? validation;
+    private IReadOnlyList<RoomView> rooms = [];
     private bool isLoading = true;
     private bool isBusy;
     private string? pageError;
     private string? actionMessage;
     private bool actionIsError;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadPageAsync();
-    }
+    private bool IsSubmitted =>
+        application is not null && !string.Equals(application.Status, "Draft", StringComparison.Ordinal);
+
+    private int TotalLicensedCapacity => validation?.Rooms.Sum(r => r.LicensedCapacity) ?? 0;
+
+    private int TotalRequiredStaff => validation?.Rooms.Sum(r => r.RequiredStaff) ?? 0;
+
+    private string DecisionTone => IsSubmitted
+        ? "decision-done"
+        : validation is null ? "decision-neutral"
+        : validation.IsValid ? "decision-ready" : "decision-blocked";
+
+    private string DecisionTitle => IsSubmitted
+        ? "Application submitted for review"
+        : validation is null ? "Capacity has not been checked"
+        : validation.IsValid ? "Ready to submit"
+        : "Cannot be submitted yet";
+
+    private string DecisionDetail => IsSubmitted
+        ? "The licensed capacity below has been recorded against each room."
+        : validation is null ? "Run the capacity check to see what each room is permitted."
+        : validation.IsValid
+            ? "Every room is within the staffing ratio, group size and floor area limits."
+            : "At least one room asks for more children than the rules allow.";
+
+    protected override async Task OnInitializedAsync() => await LoadPageAsync();
 
     private async Task LoadPageAsync()
     {
@@ -163,13 +238,14 @@ else if (facility is not null && application is not null)
             facility = await FacilityQuery.GetAsync(FacilityId);
             if (facility is null)
             {
-                pageError = "Facility not found.";
+                pageError = "Centre not found.";
                 return;
             }
 
             var applicationId = await ApplicationService.CreateDraftAsync(FacilityId);
             application = await ApplicationService.GetAsync(applicationId);
             validation = await ApplicationService.ValidateAsync(applicationId);
+            BuildRoomViews();
         }
         catch (Exception)
         {
@@ -179,6 +255,24 @@ else if (facility is not null && application is not null)
         {
             isLoading = false;
         }
+    }
+
+    private void BuildRoomViews()
+    {
+        if (application is null)
+        {
+            rooms = [];
+            return;
+        }
+
+        rooms = application.Rooms
+            .Select(r => new RoomView(
+                r.Name,
+                r.AgeGroup,
+                r.FloorAreaSqM,
+                r.ProposedCapacity,
+                validation?.Rooms.FirstOrDefault(v => v.RoomName == r.Name)))
+            .ToList();
     }
 
     private async Task RunValidationAsync()
@@ -194,9 +288,11 @@ else if (facility is not null && application is not null)
         try
         {
             validation = await ApplicationService.ValidateAsync(application.Id);
+            BuildRoomViews();
+
             actionMessage = validation.IsValid
-                ? "Validation passed for all rooms."
-                : "Validation found issues that must be fixed before submitting.";
+                ? "Capacity check passed for every room."
+                : "The capacity check found rooms that must be corrected before submitting.";
             actionIsError = !validation.IsValid;
         }
         finally
@@ -218,23 +314,32 @@ else if (facility is not null && application is not null)
         try
         {
             var result = await ApplicationService.SubmitAsync(application.Id);
-            validation = result.Validation;
+            validation = result.Validation ?? validation;
             application = await ApplicationService.GetAsync(application.Id);
+            BuildRoomViews();
 
-            if (result.Succeeded)
-            {
-                actionMessage = "Application submitted successfully.";
-                actionIsError = false;
-            }
-            else
-            {
-                actionMessage = result.ErrorMessage ?? "Submission failed.";
-                actionIsError = true;
-            }
+            actionMessage = result.Succeeded
+                ? "Application submitted. The licensed capacity has been recorded for each room."
+                : result.ErrorMessage ?? "Submission failed.";
+            actionIsError = !result.Succeeded;
         }
         finally
         {
             isBusy = false;
         }
     }
+
+    private static bool IsBinding(RoomCapacityValidationResult check, int limit)
+        => limit == check.MaxAllowedCapacity;
+
+    private static int MeterWidth(RoomCapacityValidationResult check)
+    {
+        var ceiling = Math.Max(check.MaxAllowedCapacity, check.ProposedCapacity);
+        return ceiling <= 0 ? 0 : (int)Math.Round(check.ProposedCapacity * 100.0 / ceiling);
+    }
+
+    private static string FormatAgeGroup(string ageGroup)
+        => ageGroup == "SchoolAge" ? "School age" : ageGroup;
+
+    private static string FormatArea(decimal squareMetres) => squareMetres.ToString("0.##");
 }

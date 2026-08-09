@@ -1,8 +1,24 @@
-<nav aria-label="Main navigation">
-    <ul class="nav-list">
-        <li><NavLink href="/" Match="NavLinkMatch.All">Home</NavLink></li>
-        <li><NavLink href="/facilities">My facilities</NavLink></li>
-        <li><NavLink href="/registry">Public register</NavLink></li>
-        <li><NavLink href="/reports">Compliance reports</NavLink></li>
+@* Grouped by audience: the same service is used by operators, ministry staff and the
+   public, and each group only has business with its own pages. *@
+<nav class="site-nav" aria-label="Main navigation">
+    <ul class="nav-groups">
+        <li class="nav-group">
+            <span class="nav-group-label" id="nav-operators">Operators</span>
+            <ul class="nav-list" aria-labelledby="nav-operators">
+                <li><NavLink href="/facilities">My centres</NavLink></li>
+            </ul>
+        </li>
+        <li class="nav-group">
+            <span class="nav-group-label" id="nav-ministry">Ministry staff</span>
+            <ul class="nav-list" aria-labelledby="nav-ministry">
+                <li><NavLink href="/reports">Compliance</NavLink></li>
+            </ul>
+        </li>
+        <li class="nav-group">
+            <span class="nav-group-label" id="nav-public">Public</span>
+            <ul class="nav-list" aria-labelledby="nav-public">
+                <li><NavLink href="/registry">Find a centre</NavLink></li>
+            </ul>
+        </li>
     </ul>
 </nav>

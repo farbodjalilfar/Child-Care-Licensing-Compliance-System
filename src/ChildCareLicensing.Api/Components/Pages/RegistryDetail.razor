@@ -3,84 +3,92 @@
 
 <PageTitle>@(facility?.Name ?? "Centre") - Public register</PageTitle>
 
-<p><a href="/registry">&larr; Back to the register</a></p>
-
 @if (isLoading)
 {
     <p role="status" aria-live="polite">Loading centre details...</p>
 }
 else if (facility is null)
 {
-    <h1>Centre not found</h1>
-    <p>This centre is not in the public register.</p>
+    <PageHeading Title="Centre not found" Audience="PageHeading.AudienceKind.Public">
+        This centre is not on the public register.
+    </PageHeading>
+    <p><a href="/registry">Back to the register</a></p>
 }
 else
 {
-    <h1>@facility.Name</h1>
+    <nav aria-label="Breadcrumb" class="breadcrumb">
+        <a href="/registry">Find a centre</a>
+        <span aria-hidden="true"> / </span>
+        <span aria-current="page">@facility.Name</span>
+    </nav>
 
-    <dl class="summary">
-        <div>
-            <dt>Address</dt>
-            <dd>
-                @facility.AddressLine1@(string.IsNullOrWhiteSpace(facility.AddressLine2) ? "" : $", {facility.AddressLine2}")<br />
-                @facility.City, @facility.Province @facility.PostalCode
-            </dd>
-        </div>
-        <div>
-            <dt>Licence number</dt>
-            <dd>@(facility.LicenceNumber ?? "Not licensed")</dd>
-        </div>
-        <div>
-            <dt>Licence status</dt>
-            <dd><span class="badge @BadgeClass(facility.LicenceStatus)">@facility.LicenceStatus</span></dd>
-        </div>
-        <div>
-            <dt>Issued</dt>
-            <dd>@Format(facility.LicenceIssuedAtUtc)</dd>
-        </div>
-        <div>
-            <dt>Expires</dt>
-            <dd>@Format(facility.LicenceExpiresAtUtc)</dd>
-        </div>
-        <div>
-            <dt>Licensed capacity</dt>
-            <dd>@facility.LicensedCapacity children</dd>
-        </div>
-    </dl>
+    <PageHeading Title="@facility.Name" Audience="PageHeading.AudienceKind.Public">
+        @facility.AddressLine1@(string.IsNullOrWhiteSpace(facility.AddressLine2) ? "" : $", {facility.AddressLine2}"),
+        @facility.City, @facility.Province @facility.PostalCode
+    </PageHeading>
+
+    <section aria-labelledby="licence-heading" class="decision @LicenceTone">
+        <h2 id="licence-heading">@LicenceHeadline</h2>
+        <p>@LicenceDetail</p>
+        <dl class="inline-facts">
+            <div>
+                <dt>Licence number</dt>
+                <dd>@(facility.LicenceNumber ?? "Not issued")</dd>
+            </div>
+            <div>
+                <dt>Status</dt>
+                <dd><StatusBadge Status="@facility.LicenceStatus" /></dd>
+            </div>
+            <div>
+                <dt>Issued</dt>
+                <dd>@Format(facility.LicenceIssuedAtUtc)</dd>
+            </div>
+            <div>
+                <dt>Expires</dt>
+                <dd>@Format(facility.LicenceExpiresAtUtc)</dd>
+            </div>
+            <div>
+                <dt>Licensed capacity</dt>
+                <dd>@(facility.LicensedCapacity > 0 ? $"{facility.LicensedCapacity} children" : "Not set")</dd>
+            </div>
+        </dl>
+    </section>
 
     <section aria-labelledby="inspections-heading">
         <h2 id="inspections-heading">Inspection history</h2>
 
         @if (facility.Inspections.Count == 0)
         {
-            <p>No inspections have been recorded for this centre.</p>
+            <div class="empty-state">
+                <h3>No inspections recorded</h3>
+                <p>This centre has not yet been inspected.</p>
+            </div>
         }
         else
         {
-            <div class="table-wrap">
-                <table>
-                    <caption class="visually-hidden">Inspections for @facility.Name</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">Date</th>
-                            <th scope="col">Summary</th>
-                            <th scope="col">Findings</th>
-                            <th scope="col">Critical</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var inspection in facility.Inspections)
-                        {
-                            <tr>
-                                <td>@inspection.InspectionDateUtc.ToString("yyyy-MM-dd")</td>
-                                <td>@inspection.Summary</td>
-                                <td>@inspection.ViolationCount</td>
-                                <td>@inspection.CriticalViolationCount</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+            <ol class="timeline">
+                @foreach (var inspection in facility.Inspections)
+                {
+                    <li class="timeline-item @(inspection.CriticalViolationCount > 0 ? "is-critical" : inspection.ViolationCount > 0 ? "is-warn" : "")">
+                        <p class="timeline-date">@inspection.InspectionDateUtc.ToString("MMMM d, yyyy")</p>
+                        <p class="timeline-summary">@inspection.Summary</p>
+                        <p class="timeline-findings">
+                            @if (inspection.ViolationCount == 0)
+                            {
+                                <span>No findings</span>
+                            }
+                            else
+                            {
+                                <span>@inspection.ViolationCount finding@(inspection.ViolationCount == 1 ? "" : "s")</span>
+                                @if (inspection.CriticalViolationCount > 0)
+                                {
+                                    <span class="text-error">, @inspection.CriticalViolationCount critical</span>
+                                }
+                            }
+                        </p>
+                    </li>
+                }
+            </ol>
         }
     </section>
 }
@@ -91,6 +99,29 @@ else
 
     private PublicFacilityDetail? facility;
     private bool isLoading = true;
+
+    private string LicenceTone => facility?.LicenceStatus switch
+    {
+        "Active" => "decision-ready",
+        "Unlicensed" => "decision-neutral",
+        _ => "decision-blocked"
+    };
+
+    private string LicenceHeadline => facility?.LicenceStatus switch
+    {
+        "Active" => "This centre is licensed",
+        "Unlicensed" => "This centre is not licensed",
+        "Expired" => "This licence has expired",
+        _ => $"Licence status: {facility?.LicenceStatus}"
+    };
+
+    private string LicenceDetail => facility?.LicenceStatus switch
+    {
+        "Active" => "It may operate up to the licensed capacity shown below.",
+        "Unlicensed" => "No licence has been issued for this address.",
+        "Expired" => "It may not operate until the licence is renewed.",
+        _ => "Contact the ministry for more information about this centre."
+    };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -106,12 +137,5 @@ else
         }
     }
 
-    private static string Format(DateTime? value) => value?.ToString("yyyy-MM-dd") ?? "—";
-
-    private static string BadgeClass(string status) => status switch
-    {
-        "Active" => "badge-ok",
-        "Expired" or "Revoked" => "badge-error",
-        _ => "badge-warn"
-    };
+    private static string Format(DateTime? value) => value?.ToString("MMMM d, yyyy") ?? "—";
 }
