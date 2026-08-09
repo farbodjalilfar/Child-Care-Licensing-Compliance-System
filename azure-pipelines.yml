@@ -1,0 +1,81 @@
+# Azure DevOps equivalent of the GitHub Actions workflow, kept in sync so the solution can
+# be built on either platform.
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  buildConfiguration: Release
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+stages:
+  - stage: Build
+    displayName: Build and test
+    jobs:
+      - job: BuildTest
+        displayName: Build, test and scan
+        steps:
+          - task: UseDotNet@2
+            displayName: Install .NET SDK
+            inputs:
+              packageType: sdk
+              useGlobalJson: true
+
+          - task: DotNetCoreCLI@2
+            displayName: Restore
+            inputs:
+              command: restore
+              projects: 'ChildCareLicensing.slnx'
+
+          - task: DotNetCoreCLI@2
+            displayName: Build
+            inputs:
+              command: build
+              projects: 'ChildCareLicensing.slnx'
+              arguments: '--no-restore --configuration $(buildConfiguration)'
+
+          - task: DotNetCoreCLI@2
+            displayName: Test
+            inputs:
+              command: test
+              projects: 'tests/**/*.csproj'
+              arguments: >-
+                --no-build --configuration $(buildConfiguration)
+                --collect:"XPlat Code Coverage"
+              publishTestResults: true
+
+          - script: |
+              set -e
+              dotnet list package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+              if grep -q "has the following vulnerable packages" vulnerable.txt; then
+                echo "##vso[task.logissue type=error]Vulnerable NuGet packages detected."
+                exit 1
+              fi
+            displayName: Fail on vulnerable packages
+
+          - task: DotNetCoreCLI@2
+            displayName: Publish API
+            inputs:
+              command: publish
+              publishWebProjects: false
+              projects: src/ChildCareLicensing.Api/ChildCareLicensing.Api.csproj
+              arguments: >-
+                --no-build --configuration $(buildConfiguration)
+                --output $(Build.ArtifactStagingDirectory)
+              zipAfterPublish: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: Publish artifact
+            inputs:
+              PathtoPublish: $(Build.ArtifactStagingDirectory)
+              ArtifactName: childcare-licensing-api
